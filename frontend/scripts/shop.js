@@ -1,5 +1,6 @@
 // PRODUCTS STATE
-let allProducts = [];
+(function(){
+    let allProducts = [];
 let filteredProducts = [];
 
 // SHOP PAGE ELEMENTS
@@ -519,3 +520,4 @@ document.addEventListener(
         setupSorting();
     }
 );
+})()

@@ -1,4 +1,5 @@
-// notification helper
+(function(){
+    // notification helper
 const notify = (
     message,
     type = "info"
@@ -462,3 +463,4 @@ window.requireAuth = requireAuth;
 window.defaultImage = defaultImage;
 window.safeForEach = safeForEach;
 window.safeMap = safeMap;
+})()

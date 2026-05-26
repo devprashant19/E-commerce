@@ -11,17 +11,18 @@ function initializeMobileNavbar() {
         return;
     }
 
-    // 1. Hamburger Button Click -> Menu Active karo
+    // 1. Hamburger Button Click -
     bar.addEventListener("click", (e) => {
         navLinks.classList.add("active");
+        console.log("active")
         e.stopPropagation();
     });
 
-    // 2. Cross Button Click -> Menu Se Active hatao
+    // 2. Cross Button Click 
     if (closeBtn) {
         closeBtn.addEventListener("click", (e) => {
             navLinks.classList.remove("active");
-            e.stopPropagation(); // Event bubble hokar window click trigger nahi karega
+            e.stopPropagation(); 
         });
     }
 
@@ -30,11 +31,11 @@ function initializeMobileNavbar() {
         authLink.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            profileDropdown.classList.toggle("active"); // CSS active ke mutabiq
+            profileDropdown.classList.toggle("active"); 
         });
     }
 
-    // 4. Menu ke andar kisi links par click ho toh menu band ho jaye (Cross aur Sign In chhod kar)
+
     navLinks.querySelectorAll("a").forEach((link) => {
         link.addEventListener("click", () => {
             if (link.id === "auth-link") return;
@@ -49,14 +50,14 @@ function initializeMobileNavbar() {
             profileDropdown.classList.remove("active");
         }
         
-        // Drawer close karne ke liye (Click close button, hamburger aur main menu ke bahar hona chahiye)
+
         if (navLinks.classList.contains("active") && !navLinks.contains(e.target) && !bar.contains(e.target)) {
             navLinks.classList.remove("active");
         }
     });
 }
 
-// Dom content load hone ke halka baad safely run karne ke liye
+
 setTimeout(() => {
     initializeMobileNavbar();
 }, 500);

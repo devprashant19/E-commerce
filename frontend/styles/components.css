@@ -54,9 +54,10 @@
     font-size: 24px;
     cursor: pointer;
     color: var(--text-dark, #222);
+    z-index: 2000;
 }
 
-/* Desktop par cross icon bilkul dikhna nahi chahiye */
+
 #mobile-close-btn {
     display: none;
 }
@@ -70,7 +71,7 @@
     }
 
     #mobile-menu-btn {
-        display: block; /* Mobile par toggle button dikhega */
+        display: block;
     }
 
     #navbar-links {
@@ -80,32 +81,32 @@
         justify-content: flex-start;
         gap: 25px;
         
-        /* Drawer Overlay setup */
+      
         position: fixed;
         top: 0;
-        right: -320px; /* Menu hidden rahega */
+        right: -320px; 
         height: 100vh;
         width: 300px;
         background: var(--bg-light, #ffffff);
         padding: 100px 30px;
         box-shadow: -10px 0 30px rgba(0, 0, 0, 0.05);
         transition: 0.3s ease;
-        z-index: 9999; /* Isko sabse upar rakhne ke liye taaki kuch isko dabaye na */
+        z-index: 9999; 
     }
 
-    /* JavaScript jab yeh class add karega toh menu slide-in hoga */
+
     #navbar-links.active {
         right: 0;
     }
 
-    /* CROSS BUTTON DESIGN (Fixed inside the list container) */
+
     #mobile-close-btn {
-        display: block;      /* Mobile par show hoga */
-        position: absolute;   /* Menu wrapper ke relative kaam karega */
-        top: 30px;           /* Top padding se align kiya */
-        right: 30px;          /* Right side space */
+        display: block;     
+        position: absolute;  
+        top: 30px;         
+        right: 30px;         
         cursor: pointer;
-        z-index: 10005;       /* Menu background aur baki links se aage rahega */
+        z-index: 10005;       
         background: none;
         border: none;
     }
@@ -147,7 +148,7 @@
         width: 110px;
     }
     
-    /* Chote mobile phones par cross ki position halki adjust ki */
+
     #mobile-close-btn {
         top: 25px;
         right: 25px;

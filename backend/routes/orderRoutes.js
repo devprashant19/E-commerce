@@ -9,34 +9,54 @@ const authMiddleware =
         "../middleware/authMiddleware"
     );
 
-const adminMiddleware =
-    require(
-        "../middleware/adminMiddleware"
-    );
+const {
+    authorizeRoles
+} = authMiddleware;
 
 const orderController =
     require(
         "../controllers/orderController"
     );
 
+const {
+    safeArray,
+    safeNumber,
+    sanitizeString
+} = require(
+    "../utils/helpers"
+);
+
 // validate order id
 router.param(
     "id",
-    (req, res, next, id) => {
+    (
+        req,
+        res,
+        next,
+        id
+    ) => {
+
         const parsedId =
-            parseInt(id);
+            parseInt(
+                id,
+                10
+            );
 
         if (
             !parsedId
             || parsedId < 1
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Invalid order ID"
                 });
         }
+
         req.orderId =
             parsedId;
 
@@ -44,24 +64,51 @@ router.param(
     }
 );
 
+// order api status
+router.get(
+    "/status/check",
+    (
+        req,
+        res
+    ) => {
+
+        res.status(200)
+            .json({
+
+                success: true,
+
+                message:
+                    "Order API running"
+            });
+    }
+);
+
 // create order
 router.post(
     "/",
     authMiddleware,
-    (req, res, next) => {
+    (
+        req,
+        res,
+        next
+    ) => {
+
         const {
             items,
-            total
+            total,
+            paymentMethod
         } = req.body;
 
         // validate items
         if (
-            !Array.isArray(items)
-            || !items.length
+            !safeArray(items).length
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Order items are required"
                 });
@@ -69,26 +116,50 @@ router.post(
 
         // validate total
         if (
-            Number(total) <= 0
+            safeNumber(total) <= 0
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Invalid order total"
                 });
         }
+
+        // validate payment method
+        const allowedPayments = [
+
+            "card",
+
+            "cod",
+
+            "upi"
+        ];
+
+        if (
+            !allowedPayments.includes(
+                sanitizeString(
+                    paymentMethod
+                ).toLowerCase()
+            )
+        ) {
+
+            return res.status(400)
+                .json({
+
+                    success: false,
+
+                    message:
+                        "Invalid payment method"
+                });
+        }
+
         next();
     },
     orderController.createOrder
-);
-
-// get all orders
-router.get(
-    "/",
-    authMiddleware,
-    adminMiddleware,
-    orderController.getAllOrders
 );
 
 // get current user orders
@@ -98,65 +169,93 @@ router.get(
     orderController.getUserOrders
 );
 
+// get single order
+router.get(
+    "/:id",
+    authMiddleware,
+    orderController.getOrderById
+);
+
+// get all orders (admin)
+router.get(
+    "/",
+    authMiddleware,
+    authorizeRoles(
+        "admin"
+    ),
+    orderController.getAllOrders
+);
+
 // update order status
 router.put(
     "/:id/status",
     authMiddleware,
-    adminMiddleware,
-    (req, res, next) => {
+    authorizeRoles(
+        "admin"
+    ),
+    (
+        req,
+        res,
+        next
+    ) => {
+
         const {
             status
         } = req.body;
 
         const allowedStatuses = [
+
             "pending",
+
             "processing",
+
             "shipped",
+
             "delivered",
+
             "cancelled"
         ];
 
         if (
-            !status
-            || !allowedStatuses.includes(
-                String(status)
-                    .toLowerCase()
+            !allowedStatuses.includes(
+                sanitizeString(
+                    status
+                ).toLowerCase()
             )
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Invalid order status"
                 });
         }
+
         next();
     },
     orderController.updateOrderStatus
 );
 
-// order route status
-router.get(
-    "/status/check",
-    (req, res) => {
-        res.status(200)
+// route fallback
+router.use(
+    (
+        req,
+        res
+    ) => {
+
+        res.status(404)
             .json({
-                success: true,
+
+                success: false,
+
                 message:
-                    "Order API running"
+                    "Order route not found"
             });
     }
 );
-
-// route fallback
-router.use((req, res) => {
-    res.status(404)
-        .json({
-            success: false,
-            message:
-                "Order route not found"
-        });
-});
 
 module.exports =
     router;

@@ -1,6 +1,10 @@
 // global state
 let allProducts = [];
 
+// loading state
+let isLoading =
+    false;
+
 // containers
 const featuredContainer =
     document.getElementById(
@@ -12,48 +16,136 @@ const arrivalsContainer =
         "new-arrivals-container"
     );
 
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
+// loading skeleton
+function renderLoadingState() {
+
+    const loadingHTML =
+        `
+            <div class="loading-products">
+                Loading products...
+            </div>
+        `;
+
+    if (
+        featuredContainer
+    ) {
+
+        featuredContainer.innerHTML =
+            loadingHTML;
+    }
+
+    if (
+        arrivalsContainer
+    ) {
+
+        arrivalsContainer.innerHTML =
+            loadingHTML;
+    }
+}
+
 // fetch products
 async function fetchAllProducts() {
+
+    if (
+        isLoading
+    ) {
+
+        return;
+    }
+
+    isLoading =
+        true;
+
+    renderLoadingState();
+
     try {
+
         const data =
             await AppUtils.apiRequest(
-                "/products"
+                "/products?limit=50"
             );
 
         if (
             data.success
         ) {
+
             allProducts =
-                Array.isArray(
+                AppUtils.safeArray(
                     data.products
-                )
-                    ? data.products
-                    : [];
+                );
 
             window.allProducts =
                 allProducts;
 
             renderHomepageProducts();
+
+        } else {
+
+            renderEmptyState();
         }
 
     } catch (error) {
+
         console.error(
             "PRODUCT FETCH ERROR:",
             error
         );
+
         renderEmptyState();
+
+    } finally {
+
+        isLoading =
+            false;
     }
 }
-
-fetchAllProducts();
 
 // render homepage products
 function renderHomepageProducts() {
 
     if (
-        !allProducts.length
+        !AppUtils.safeArray(
+            allProducts
+        ).length
     ) {
+
         renderEmptyState();
+
         return;
     }
 
@@ -61,15 +153,27 @@ function renderHomepageProducts() {
     if (
         featuredContainer
     ) {
+
         const featuredProducts =
             allProducts.filter(
-                (product) =>
-                    Number(product.featured) === 1
+                (
+                    product
+                ) => {
+
+                    return (
+                        Number(
+                            product.featured
+                        ) === 1
+                    );
+                }
             );
 
         renderProducts(
             featuredContainer,
-            featuredProducts.slice(0, 8)
+            featuredProducts.slice(
+                0,
+                8
+            )
         );
     }
 
@@ -77,36 +181,56 @@ function renderHomepageProducts() {
     if (
         arrivalsContainer
     ) {
+
         const newArrivals =
             allProducts.filter(
-                (product) =>
-                    Number(product.featured) !== 1
+                (
+                    product
+                ) => {
+
+                    return (
+                        Number(
+                            product.featured
+                        ) !== 1
+                    );
+                }
             );
 
         renderProducts(
             arrivalsContainer,
-            newArrivals.slice(0, 8)
+            newArrivals.slice(
+                0,
+                8
+            )
         );
     }
 }
 
 // empty state
 function renderEmptyState() {
+
     const containers = [
+
         featuredContainer,
+
         arrivalsContainer
     ];
 
     containers.forEach(
-        (container) => {
+        (
+            container
+        ) => {
+
             if (
                 container
             ) {
-                container.innerHTML = `
-                    <p class="empty-products">
-                        No products available.
-                    </p>
-                `;
+
+                container.innerHTML =
+                    `
+                        <p class="empty-products">
+                            No products available.
+                        </p>
+                    `;
             }
         }
     );
@@ -117,20 +241,51 @@ function renderProducts(
     container,
     products = []
 ) {
+
     if (
         !container
     ) {
+
         return;
     }
 
     container.innerHTML =
         "";
 
+    if (
+        !AppUtils.safeArray(
+            products
+        ).length
+    ) {
+
+        container.innerHTML =
+            `
+                <p class="empty-products">
+                    No products available.
+                </p>
+            `;
+
+        return;
+    }
+
     const fragment =
         document.createDocumentFragment();
 
-    products.forEach(
-        (product, index) => {
+    AppUtils.safeArray(
+        products
+    ).forEach(
+        (
+            product
+        ) => {
+
+            if (
+                !product
+                ||
+                !product.id
+            ) {
+
+                return;
+            }
 
             const card =
                 document.createElement(
@@ -159,19 +314,144 @@ function renderProducts(
     container.appendChild(
         fragment
     );
+
     initializeProductCardFeatures();
+}
+
+// quick view modal
+function createQuickViewModal(
+    imageSrc,
+    imageAlt
+) {
+
+    const modal =
+        document.createElement(
+            "div"
+        );
+
+    modal.className =
+        "quick-view-modal";
+
+    modal.style.cssText =
+        `
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        `;
+
+    modal.setAttribute(
+        "role",
+        "dialog"
+    );
+
+    modal.setAttribute(
+        "aria-modal",
+        "true"
+    );
+
+    const box =
+        document.createElement(
+            "div"
+        );
+
+    box.style.cssText =
+        `
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        `;
+
+    const image =
+        document.createElement(
+            "img"
+        );
+
+    image.src =
+        escapeHTML(
+            imageSrc
+        );
+
+    image.alt =
+        escapeHTML(
+            imageAlt
+            || "Product Image"
+        );
+
+    image.style.cssText =
+        `
+            width: 100%;
+            max-height: 450px;
+            object-fit: contain;
+        `;
+
+    const closeButton =
+        document.createElement(
+            "button"
+        );
+
+    closeButton.innerHTML =
+        "&times;";
+
+    closeButton.setAttribute(
+        "aria-label",
+        "Close modal"
+    );
+
+    closeButton.style.cssText =
+        `
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            border: none;
+            background: transparent;
+            font-size: 28px;
+            cursor: pointer;
+        `;
+
+    box.appendChild(
+        closeButton
+    );
+
+    box.appendChild(
+        image
+    );
+
+    modal.appendChild(
+        box
+    );
+
+    return {
+        modal,
+        closeButton
+    };
 }
 
 // product card features
 function initializeProductCardFeatures() {
+
     const productCards =
         document.querySelectorAll(
             ".pro"
         );
 
-    // quick view modal
-    productCards.forEach(
-        (card) => {
+    AppUtils.safeArray(
+        [
+            ...productCards
+        ]
+    ).forEach(
+        (
+            card
+        ) => {
+
             const img =
                 card.querySelector(
                     "img"
@@ -180,77 +460,33 @@ function initializeProductCardFeatures() {
             if (
                 !img
             ) {
+
                 return;
             }
+
+            // avoid duplicate listeners
+            if (
+                img.dataset.modalBound
+            ) {
+
+                return;
+            }
+
+            img.dataset.modalBound =
+                "true";
 
             img.addEventListener(
                 "click",
                 () => {
-                    const modal =
-                        document.createElement(
-                            "div"
+
+                    const {
+                        modal,
+                        closeButton
+                    } =
+                        createQuickViewModal(
+                            img.src,
+                            img.alt
                         );
-
-                    modal.style.cssText = `
-                        position: fixed;
-                        inset: 0;
-                        background: rgba(0,0,0,0.7);
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        z-index: 9999;
-                        padding: 20px;
-                    `;
-
-                    modal.setAttribute(
-                        "role",
-                        "dialog"
-                    );
-
-                    modal.setAttribute(
-                        "aria-modal",
-                        "true"
-                    );
-
-                    const box =
-                        document.createElement(
-                            "div"
-                        );
-
-                    box.style.cssText = `
-                        background: white;
-                        padding: 20px;
-                        border-radius: 12px;
-                        max-width: 420px;
-                        width: 100%;
-                        text-align: center;
-                    `;
-
-                    const big =
-                        document.createElement(
-                            "img"
-                        );
-
-                    big.src =
-                        img.src;
-
-                    big.alt =
-                        img.alt ||
-                        "Product Image";
-
-                    big.style.cssText = `
-                        width: 100%;
-                        max-height: 450px;
-                        object-fit: contain;
-                    `;
-
-                    box.appendChild(
-                        big
-                    );
-
-                    modal.appendChild(
-                        box
-                    );
 
                     document.body.appendChild(
                         modal
@@ -260,6 +496,7 @@ function initializeProductCardFeatures() {
                         "hidden";
 
                     function closeModal() {
+
                         document.body.style.overflow =
                             "";
 
@@ -274,23 +511,34 @@ function initializeProductCardFeatures() {
                     function handleEscape(
                         event
                     ) {
+
                         if (
                             event.key ===
                             "Escape"
                         ) {
+
                             closeModal();
                         }
                     }
 
                     modal.addEventListener(
                         "click",
-                        (event) => {
+                        (
+                            event
+                        ) => {
+
                             if (
                                 event.target === modal
                             ) {
+
                                 closeModal();
                             }
                         }
+                    );
+
+                    closeButton.addEventListener(
+                        "click",
+                        closeModal
                     );
 
                     document.addEventListener(
@@ -302,3 +550,56 @@ function initializeProductCardFeatures() {
         }
     );
 }
+
+// navbar auth sync
+function syncNavbarAuth() {
+
+    const user =
+        AppUtils.getUser();
+
+    const authButtons =
+        document.querySelectorAll(
+            "[data-auth-state]"
+        );
+
+    authButtons.forEach(
+        (
+            element
+        ) => {
+
+            const requiredState =
+                element.dataset.authState;
+
+            if (
+                requiredState === "authenticated"
+            ) {
+
+                element.style.display =
+                    user
+                        ? ""
+                        : "none";
+            }
+
+            if (
+                requiredState === "guest"
+            ) {
+
+                element.style.display =
+                    user
+                        ? "none"
+                        : "";
+            }
+        }
+    );
+}
+
+// init
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        syncNavbarAuth();
+
+        fetchAllProducts();
+    }
+);

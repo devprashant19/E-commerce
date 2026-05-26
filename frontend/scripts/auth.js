@@ -56,6 +56,41 @@ const elements = {
         )
 };
 
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
 // validation
 const emailRegex =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -101,6 +136,15 @@ async function loginUser(
     );
 }
 
+async function logoutUser() {
+    return await AppUtils.apiRequest(
+        "/auth/logout",
+        {
+            method: "POST"
+        }
+    );
+}
+
 // loading state
 function toggleFormLoading(
     button,
@@ -142,38 +186,62 @@ function saveAuthSession(
     }
 
     localStorage.setItem(
-        "token",
+        CONFIG.STORAGE_KEYS.TOKEN,
         response.accessToken || ""
     );
 
     localStorage.setItem(
-        "refreshToken",
+        CONFIG.STORAGE_KEYS.REFRESH_TOKEN,
         response.refreshToken || ""
     );
 
     AppUtils.setJSON(
-        "user",
+        CONFIG.STORAGE_KEYS.USER,
         response.user || {}
     );
 }
 
 // clear auth
-function clearAuthSession() {
-    AppUtils.clearAuthData();
+async function clearAuthSession() {
 
-    localStorage.removeItem(
-        "cart"
-    );
+    try {
 
-    localStorage.removeItem(
-        "wishlist"
-    );
+        // invalidate refresh token
+        if (
+            AppUtils.getToken()
+        ) {
 
-    localStorage.removeItem(
-        "socialUser"
-    );
+            await logoutUser();
+        }
 
-    firebase.auth().signOut();
+    } catch (error) {
+
+        console.error(
+            "LOGOUT API ERROR:",
+            error
+        );
+
+    } finally {
+
+        // always clear local session
+        AppUtils.clearAuthData();
+
+        AppUtils.setJSON(
+            "socialUser",
+        );
+
+        try {
+
+            await firebase.auth().signOut();
+
+        } catch (firebaseError) {
+
+            console.error(
+                "FIREBASE LOGOUT ERROR:",
+                firebaseError
+            );
+        }
+    }
 }
 
 // signup
@@ -432,12 +500,21 @@ function initializeAuthUI() {
 
     const token =
         AppUtils.getToken();
+    
+    // invalid token cleanup
+    if (
+        token
+        &&
+        !AppUtils.getUser()
+    ) {
+
+        AppUtils.clearAuthData();
+    }
 
     const socialUser =
-        JSON.parse(
-            localStorage.getItem(
-                "socialUser"
-            )
+        AppUtils.getJSON(
+            "socialUser",
+            null
         );
 
     if (
@@ -448,7 +525,9 @@ function initializeAuthUI() {
             socialUser?.image
                 ? `
                     <img
-                        src="${socialUser.image}"
+                        src="${escapeHTML(
+                            socialUser.image
+                        )}"
                         alt="profile"
                         class="nav-profile-image"
                     >
@@ -476,7 +555,7 @@ function initializeAuthUI() {
         logoutBtn?.addEventListener(
             "click",
             async () => {
-                clearAuthSession();
+                await clearAuthSession();
 
                 dropdown?.classList.remove(
                     "active"
@@ -489,7 +568,11 @@ function initializeAuthUI() {
 
                 setTimeout(() => {
                     window.location.href =
-                        "index.html";
+                        document.referrer?.includes(
+                            window.location.hostname
+                        )
+                            ? document.referrer
+                            : "index.html";
 
                 }, 1000);
             }

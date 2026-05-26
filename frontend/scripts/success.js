@@ -1,13 +1,50 @@
-import {
-    getJSON
-} from "./utils.js";
+// require auth
+const currentUser =
+    AppUtils.requireAuth();
 
-// LOAD ORDER DATA
-const orders =
-    getJSON("orders") || [];
+if (
+    !currentUser
+) {
 
-// ELEMENTS
+    throw new Error(
+        "Authentication required"
+    );
+}
+
+// get order id from url
+const orderId =
+    new URLSearchParams(
+        window.location.search
+    ).get("id");
+
+// invalid access
+if (
+    !orderId
+) {
+
+    AppUtils.notify(
+        "Invalid order",
+        "error"
+    );
+
+    setTimeout(
+        () => {
+
+            window.location.href =
+                "shop.html";
+
+        },
+        1000
+    );
+
+    throw new Error(
+        "Missing order ID"
+    );
+}
+
+// elements
 const elements = {
+
     orderId:
         document.getElementById(
             "order-id"
@@ -24,39 +61,122 @@ const elements = {
         )
 };
 
-// LOAD LATEST ORDER
-if(orders.length > 0){
-    const latestOrder =
-        orders[orders.length - 1];
+// fetch order
+async function fetchOrder() {
 
-    if(elements.orderId){
-        elements.orderId.innerText =
-            latestOrder.id || "N/A";
-    }
+    try {
 
-    if(elements.orderDate){
-        elements.orderDate.innerText =
-            latestOrder.date || "N/A";
+        const response =
+            await AppUtils.apiRequest(
+                `/orders/${orderId}`
+            );
+
+        if (
+            !response.success
+            ||
+            !response.order
+        ) {
+
+            AppUtils.notify(
+                "Order not found",
+                "error"
+            );
+
+            setTimeout(
+                () => {
+
+                    window.location.href =
+                        "shop.html";
+
+                },
+                1000
+            );
+
+            return;
+        }
+
+        const order =
+            response.order;
+
+        // render order id
+        if (
+            elements.orderId
+        ) {
+
+            elements.orderId.innerText =
+                order.id || "N/A";
+        }
+
+        // render order date
+        if (
+            elements.orderDate
+        ) {
+
+            elements.orderDate.innerText =
+                order.created_at
+                    ? new Date(
+                        order.created_at
+                    ).toLocaleDateString()
+                    : "N/A";
+        }
+
+    } catch (error) {
+
+        console.error(
+            "SUCCESS PAGE ERROR:",
+            error
+        );
+
+        AppUtils.notify(
+            "Failed to load order",
+            "error"
+        );
     }
 }
 
-// SUCCESS ANIMATION
-if(elements.successIcon){
+// success animation
+function playSuccessAnimation() {
+
+    if (
+        !elements.successIcon
+    ) {
+        return;
+    }
+
     elements.successIcon.animate(
         [
             {
-                transform: "scale(0)"
+                transform:
+                    "scale(0)"
             },
+
             {
-                transform: "scale(1.1)"
+                transform:
+                    "scale(1.1)"
             },
+
             {
-                transform: "scale(1)"
+                transform:
+                    "scale(1)"
             }
         ],
         {
-            duration: 800,
-            easing: "ease"
+            duration:
+                800,
+
+            easing:
+                "ease"
         }
     );
 }
+
+// init
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        fetchOrder();
+
+        playSuccessAnimation();
+    }
+);

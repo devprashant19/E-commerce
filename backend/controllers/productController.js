@@ -1,45 +1,33 @@
 const db = require("../config/db");
 
 // helper functions
-const safeNumber = (value) => {
-    const parsed =
-        parseFloat(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
-
-const safeInteger = (value) => {
-    const parsed =
-        parseInt(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
+const {
+    safeNumber,
+    safeInteger,
+    sanitizeString,
+    getPagination,
+    buildPaginationMeta,
+    safeArray
+} = require("../utils/helpers");
 
 // get all products
 const getProducts = (req, res) => {
 
-    const page = Math.max(
-        1,
-        safeInteger(req.query.page) || 1
+    const {
+        page,
+        limit,
+        offset
+    } = getPagination(
+        req.query.page,
+        req.query.limit,
+        50
     );
-
-    const limit = Math.min(
-        50,
-        safeInteger(req.query.limit) || 8
-    );
-
-    const offset =
-        (page - 1) * limit;
 
     const search =
         req.query.search
-            ? `%${String(
+            ? `%${sanitizeString(
                 req.query.search
-            ).trim()}%`
+            )}%`
             : null;
 
     let query = `
@@ -57,51 +45,83 @@ const getProducts = (req, res) => {
 
     const params = [];
 
+    // query conditions
+    const conditions = [];
+
     // category filter
-    if (req.query.category) {
-        query += " WHERE category = ?";
+    if (
+        req.query.category
+    ) {
+
+        conditions.push(
+            "category = ?"
+        );
 
         params.push(
-            String(
+            sanitizeString(
                 req.query.category
-            ).trim()
+            )
         );
     }
 
     // featured filter
-    if (req.query.featured === "true") {
-        query += params.length
-            ? " AND featured = 1"
-            : " WHERE featured = 1";
+    if (
+        req.query.featured === "true"
+    ) {
+
+        conditions.push(
+            "featured = 1"
+        );
     }
 
     // search filter
-    if (search) {
-        query += params.length
-            ? " AND name LIKE ?"
-            : " WHERE name LIKE ?";
+    if (
+        search
+    ) {
 
-        params.push(search);
+        conditions.push(
+            "name LIKE ?"
+        );
+
+        params.push(
+            search
+        );
     }
 
-    query += `
-        ORDER BY id DESC
-        LIMIT ?
-        OFFSET ?
+    // build where clause
+    if (
+        conditions.length
+    ) {
+
+        query += `
+            WHERE ${conditions.join(" AND ")}
+        `;
+    }
+
+    const countQuery = `
+        SELECT COUNT(*) AS total
+        FROM products
+        ${conditions.length
+            ? `WHERE ${conditions.join(" AND ")}`
+            : ""
+        }
     `;
 
-    params.push(
-        limit,
-        offset
-    );
-
     db.query(
-        query,
+        countQuery,
         params,
-        (error, results) => {
+        (
+            countError,
+            countResults
+        ) => {
 
-            if (error) {
-                console.error(error);
+            if (
+                countError
+            ) {
+
+                console.error(
+                    countError
+                );
 
                 return res.status(500)
                     .json({
@@ -111,21 +131,77 @@ const getProducts = (req, res) => {
                     });
             }
 
-            res.status(200)
-                .json({
-                    success: true,
-                    page,
-                    limit,
-                    count:
-                        Array.isArray(results)
-                            ? results.length
-                            : 0,
+            const total =
+                Number(
+                    countResults?.[0]?.total || 0
+                );
 
-                    products:
-                        Array.isArray(results)
-                            ? results
-                            : []
-                });
+            query += `
+                ORDER BY id DESC
+                LIMIT ?
+                OFFSET ?
+            `;
+
+            const finalParams = [
+                ...params,
+                limit,
+                offset
+            ];
+
+            db.query(
+                query,
+                finalParams,
+                (
+                    error,
+                    results
+                ) => {
+
+                    if (
+                        error
+                    ) {
+
+                        console.error(
+                            error
+                        );
+
+                        return res.status(500)
+                            .json({
+                                success: false,
+                                message:
+                                    "Server error"
+                            });
+                    }
+
+                    res.status(200)
+                        .json({
+                            success: true,
+
+                            page,
+
+                            limit,
+
+                            total,
+
+                            ...buildPaginationMeta(
+                                total,
+                                page,
+                                limit
+                            ),
+
+                            count:
+                                Array.isArray(
+                                    results
+                                )
+                                    ? results.length
+                                    : 0,
+
+                            products:
+                                safeArray(
+                                    results
+                                )
+                        });
+                }
+            );
         }
     );
 };
@@ -222,15 +298,11 @@ const createProduct = (req, res) => {
     db.query(
         query,
         [
-            String(name).trim(),
+            sanitizeString(name),
             description || "",
             safeNumber(price),
-            String(
-                image || ""
-            ).trim(),
-            String(
-                category || ""
-            ).trim(),
+            sanitizeString(image),
+            sanitizeString(category),
             Math.max(
                 0,
                 safeInteger(stock)
@@ -319,15 +391,11 @@ const updateProduct = (req, res) => {
     db.query(
         query,
         [
-            String(name).trim(),
+            sanitizeString(name),
             description || "",
             safeNumber(price),
-            String(
-                image || ""
-            ).trim(),
-            String(
-                category || ""
-            ).trim(),
+            sanitizeString(image),
+            sanitizeString(category),
             Math.max(
                 0,
                 safeInteger(stock)

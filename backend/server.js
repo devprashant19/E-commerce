@@ -1,24 +1,73 @@
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const rateLimit = require("express-rate-limit");
-const helmet = require("helmet");
+const express =
+    require("express");
 
-// config
+const cors =
+    require("cors");
+
+const dotenv =
+    require("dotenv");
+
+const rateLimit =
+    require("express-rate-limit");
+
+const helmet =
+    require("helmet");
+
+// load environment
 dotenv.config();
 
+// validate critical env
+const requiredEnv = [
+
+    "JWT_SECRET",
+
+    "DB_HOST",
+
+    "DB_USER",
+
+    "DB_PASSWORD",
+
+    "DB_NAME"
+];
+
+requiredEnv.forEach(
+    (
+        key
+    ) => {
+
+        if (
+            !process.env[key]
+        ) {
+
+            console.error(
+                `Missing environment variable: ${key}`
+            );
+
+            process.exit(1);
+        }
+    }
+);
+
 // database
-require("./config/db");
+require(
+    "./config/db"
+);
 
 // routes
 const productRoutes =
-    require("./routes/productRoutes");
+    require(
+        "./routes/productRoutes"
+    );
 
 const authRoutes =
-    require("./routes/authRoutes");
+    require(
+        "./routes/authRoutes"
+    );
 
 const orderRoutes =
-    require("./routes/orderRoutes");
+    require(
+        "./routes/orderRoutes"
+    );
 
 // app
 const app =
@@ -26,106 +75,208 @@ const app =
 
 // constants
 const PORT =
-    process.env.PORT || 5000;
+    Number(
+        process.env.PORT
+    ) || 5000;
 
 const FRONTEND_URL =
     process.env.FRONTEND_URL
-    || "http://10.132.110.66:5501";
+    || "http://localhost:5500";
+
+// trust proxy
+app.set(
+    "trust proxy",
+    1
+);
 
 // security
 app.disable(
     "x-powered-by"
 );
 
+// security headers
 app.use(
-    helmet()
+    helmet({
+
+        crossOriginEmbedderPolicy:
+            false,
+
+        contentSecurityPolicy: {
+
+            directives: {
+
+                defaultSrc: [
+                    "'self'"
+                ],
+
+                scriptSrc: [
+
+                    "'self'",
+
+                    "'unsafe-inline'",
+
+                    "https://www.gstatic.com",
+
+                    "https://apis.google.com"
+                ],
+
+                styleSrc: [
+
+                    "'self'",
+
+                    "'unsafe-inline'",
+
+                    "https://fonts.googleapis.com",
+
+                    "https://cdnjs.cloudflare.com"
+                ],
+
+                fontSrc: [
+
+                    "'self'",
+
+                    "https://fonts.gstatic.com",
+
+                    "https://cdnjs.cloudflare.com"
+                ],
+
+                imgSrc: [
+
+                    "'self'",
+
+                    "data:",
+
+                    "https:"
+                ],
+
+                connectSrc: [
+
+                    "'self'",
+
+                    FRONTEND_URL
+                ]
+            }
+        }
+    })
 );
 
-// allowed frontend origins
+// allowed origins
 const allowedOrigins = [
+
     "http://localhost:5500",
+
     "http://127.0.0.1:5500",
+
     "http://localhost:5501",
+
     "http://127.0.0.1:5501",
 
-    // local ips
-    "http://10.132.110.66:5501",
-    "http://10.147.216.66:5501",
+    FRONTEND_URL,
 
-    // vercel frontend
+    // vercel deployments
     "https://e-commerce-git-main-bhuvanshs-projects.vercel.app",
 
-    // custom domain
     "https://www.bhuvansh.xyz"
 ];
 
 // cors
 app.use(
     cors({
-        origin: (
-            origin,
-            callback
-        ) => {
 
-            // allow requests without origin
-            if (!origin) {
+        origin:
+            (
+                origin,
+                callback
+            ) => {
+
+                // allow non-browser requests
+                if (
+                    !origin
+                ) {
+
+                    return callback(
+                        null,
+                        true
+                    );
+                }
+
+                const isAllowed =
+                    allowedOrigins.includes(
+                        origin
+                    )
+                    ||
+                    origin.endsWith(
+                        ".vercel.app"
+                    );
+
+                if (
+                    isAllowed
+                ) {
+
+                    return callback(
+                        null,
+                        true
+                    );
+                }
+
                 return callback(
-                    null,
-                    true
+                    new Error(
+                        "CORS not allowed"
+                    )
                 );
-            }
+            },
 
-            if (
-                allowedOrigins.includes(origin)
-            ) {
-                return callback(
-                    null,
-                    true
-                );
-            }
-
-            return callback(
-                new Error(
-                    "CORS not allowed"
-                )
-            );
-        },
+        credentials:
+            true,
 
         methods: [
+
             "GET",
+
             "POST",
+
             "PUT",
-            "DELETE",
-            "PATCH"
+
+            "PATCH",
+
+            "DELETE"
         ],
 
         allowedHeaders: [
-            "Content-Type",
-            "Authorization"
-        ],
 
-        credentials: true
+            "Content-Type",
+
+            "Authorization"
+        ]
     })
 );
 
-// body parser
+// body parsers
 app.use(
     express.json({
-        limit: "10mb"
+
+        limit:
+            "1mb"
     })
 );
 
 app.use(
     express.urlencoded({
-        extended: true,
-        limit: "10mb"
+
+        extended:
+            true,
+
+        limit:
+            "1mb"
     })
 );
 
 // request logger
 if (
-    process.env.NODE_ENV !== "production"
+    process.env.NODE_ENV !==
+    "production"
 ) {
+
     app.use(
         (
             req,
@@ -142,26 +293,64 @@ if (
     );
 }
 
-// rate limiter
+// auth limiter
 const authLimiter =
     rateLimit({
+
         windowMs:
             15 * 60 * 1000,
 
-        max: 20,
+        max:
+            20,
 
-        standardHeaders: true,
+        standardHeaders:
+            true,
 
-        legacyHeaders: false,
+        legacyHeaders:
+            false,
 
         message: {
-            success: false,
+
+            success:
+                false,
+
             message:
                 "Too many requests. Please try again later."
         }
     });
 
-// auth limiter
+// api limiter
+const apiLimiter =
+    rateLimit({
+
+        windowMs:
+            60 * 1000,
+
+        max:
+            120,
+
+        standardHeaders:
+            true,
+
+        legacyHeaders:
+            false,
+
+        message: {
+
+            success:
+                false,
+
+            message:
+                "Too many API requests"
+        }
+    });
+
+// apply rate limiting
+app.use(
+    "/api",
+    apiLimiter
+);
+
 app.use(
     "/api/auth/login",
     authLimiter
@@ -180,15 +369,22 @@ app.get(
         res
     ) => {
 
-        res.status(200).json({
-            success: true,
-            message:
-                "Server is healthy"
-        });
+        return res.status(200)
+            .json({
+
+                success: true,
+
+                environment:
+                    process.env.NODE_ENV
+                    || "development",
+
+                message:
+                    "Server is healthy"
+            });
     }
 );
 
-// home route
+// root route
 app.get(
     "/",
     (
@@ -196,11 +392,14 @@ app.get(
         res
     ) => {
 
-        res.status(200).json({
-            success: true,
-            message:
-                "E-Commerce Backend Running 🚀"
-        });
+        return res.status(200)
+            .json({
+
+                success: true,
+
+                message:
+                    "E-Commerce Backend Running 🚀"
+            });
     }
 );
 
@@ -220,18 +419,21 @@ app.use(
     orderRoutes
 );
 
-// 404
+// 404 handler
 app.use(
     (
         req,
         res
     ) => {
 
-        res.status(404).json({
-            success: false,
-            message:
-                "Route not found"
-        });
+        return res.status(404)
+            .json({
+
+                success: false,
+
+                message:
+                    "Route not found"
+            });
     }
 );
 
@@ -244,39 +446,96 @@ app.use(
         next
     ) => {
 
-        console.error(
-            "SERVER ERROR:",
-            err
-        );
+        if (
+            process.env.NODE_ENV !==
+            "production"
+        ) {
+
+            console.error(
+                "SERVER ERROR:",
+                err
+            );
+
+        } else {
+
+            console.error(
+                "SERVER ERROR:",
+                err.message
+            );
+        }
 
         if (
             res.headersSent
         ) {
-            return next(err);
+
+            return next(
+                err
+            );
         }
 
-        res.status(
+        return res.status(
             err.status || 500
         ).json({
+
             success: false,
+
             message:
-                err.message ||
-                "Internal server error"
+                process.env.NODE_ENV ===
+                "production"
+                    ? "Internal server error"
+                    : err.message
         });
     }
 );
 
-// graceful shutdown
+// unhandled promise rejection
 process.on(
-    "SIGINT",
-    () => {
+    "unhandledRejection",
+    (
+        reason
+    ) => {
 
-        console.log(
-            "\nShutting down server..."
+        console.error(
+            "UNHANDLED REJECTION:",
+            reason
+        );
+    }
+);
+
+// uncaught exception
+process.on(
+    "uncaughtException",
+    (
+        error
+    ) => {
+
+        console.error(
+            "UNCAUGHT EXCEPTION:",
+            error
         );
 
-        process.exit(0);
+        process.exit(1);
     }
+);
+
+// graceful shutdown
+function shutdown() {
+
+    console.log(
+        "\nShutting down server..."
+    );
+
+    process.exit(0);
+}
+
+process.on(
+    "SIGINT",
+    shutdown
+);
+
+process.on(
+    "SIGTERM",
+    shutdown
 );
 
 // start server
@@ -286,7 +545,7 @@ app.listen(
     () => {
 
         console.log(
-            `Server running on http://localhost:${PORT}`
+            `Server running on port ${PORT}`
         );
 
         console.log(

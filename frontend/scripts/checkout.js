@@ -2,13 +2,24 @@
 const cart =
     AppUtils.getCart();
 
+// require authentication
+const currentUser =
+    AppUtils.requireAuth();
+
+if (
+    !currentUser
+) {
+
+    throw new Error(
+        "Authentication required"
+    );
+}
+
 // EMPTY CART REDIRECT
 if (
-    !Array.isArray(
+    !AppUtils.safeArray(
         cart
-    )
-    ||
-    cart.length === 0
+    ).length
 ) {
 
     AppUtils.notify(
@@ -113,6 +124,41 @@ const elements = {
             '#checkout-form button[type="submit"]'
         )
 };
+
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
 
 // SAFE HELPERS
 function safePrice(
@@ -242,9 +288,9 @@ function renderCheckout() {
                     <div class="checkout-item-info">
 
                         <span>
-                            ${
+                            ${escapeHTML(
                                 item.name || "Product"
-                            }
+                            )}
                         </span>
 
                         <small>
@@ -456,33 +502,68 @@ function createOrderPayload() {
             'input[name="payment"]:checked'
         );
 
+    const totals =
+        calculateTotals();
+
     return {
-        customer_name:
-            elements.fullName.value.trim(),
 
-        customer_email:
-            elements.email.value.trim(),
+        customer: {
 
-        customer_phone:
-            elements.phone.value.trim(),
+            name:
+                elements.fullName.value.trim(),
 
-        city:
-            elements.city.value.trim(),
+            email:
+                elements.email.value.trim(),
 
-        state:
-            elements.state.value.trim(),
+            phone:
+                elements.phone.value.trim()
+        },
 
-        zip:
-            elements.zip.value.trim(),
+        address: {
 
-        full_address:
-            elements.address.value.trim(),
+            city:
+                elements.city.value.trim(),
 
-        payment_method:
-            selectedPayment.value,
+            state:
+                elements.state.value.trim(),
+
+            zip:
+                elements.zip.value.trim(),
+
+            fullAddress:
+                elements.address.value.trim()
+        },
+
+        paymentMethod:
+            selectedPayment.value
+                .toLowerCase(),
+
+        total:
+            totals.total,
 
         items:
-            cart
+            AppUtils.safeArray(
+                cart
+            ).map(
+                (
+                    item
+                ) => ({
+
+                    id:
+                        item.id,
+
+                    qty:
+                        safeQty(
+                            item.qty
+                        ),
+
+                    color:
+                        item.color || "",
+
+                    size:
+                        item.size || ""
+                })
+            )
     };
 }
 
@@ -560,21 +641,6 @@ if (
                         []
                     );
 
-                    // store order
-                    AppUtils.setJSON(
-                        "lastOrder",
-                        {
-                            orderId:
-                                data.orderId,
-
-                            total:
-                                data.total,
-
-                            items:
-                                cart
-                        }
-                    );
-
                     // update ui
                     if (
                         typeof updateCartCount ===
@@ -597,7 +663,7 @@ if (
                         () => {
 
                             window.location.href =
-                                "success.html";
+                                `success.html?id=${data.orderId}`;
 
                         },
                         1200

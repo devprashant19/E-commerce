@@ -2,57 +2,89 @@ const jwt =
     require("jsonwebtoken");
 
 // environment validation
-if (!process.env.JWT_SECRET) {
+if (
+    !process.env.JWT_SECRET
+) {
+
     throw new Error(
         "JWT_SECRET environment variable is not set"
     );
 }
 
+// extract bearer token
+function extractToken(
+    authHeader
+) {
+
+    if (
+        !authHeader
+        ||
+        typeof authHeader !== "string"
+    ) {
+
+        return null;
+    }
+
+    if (
+        !authHeader.startsWith(
+            "Bearer "
+        )
+    ) {
+
+        return null;
+    }
+
+    const token =
+        authHeader
+            .split(" ")[1]
+            ?.trim();
+
+    return token || null;
+}
+
+// unauthorized response
+function unauthorized(
+    res,
+    message =
+        "Unauthorized access"
+) {
+
+    return res.status(401)
+        .json({
+
+            success: false,
+
+            message
+        });
+}
+
 // auth middleware
 const authMiddleware =
-    (req, res, next) => {
+    (
+        req,
+        res,
+        next
+    ) => {
+
         try {
+
             const authHeader =
                 req.headers.authorization;
 
-            // validate auth header
-            if (!authHeader) {
-                return res.status(401)
-                    .json({
-                        success: false,
-                        message:
-                            "No token provided"
-                    });
-            }
-
-            // validate bearer format
-            if (
-                !authHeader.startsWith(
-                    "Bearer "
-                )
-            ) {
-
-                return res.status(401)
-                    .json({
-                        success: false,
-                        message:
-                            "Bearer token required"
-                    });
-            }
-
             // extract token
             const token =
-                authHeader
-                    .split(" ")[1]
-                    ?.trim();
+                extractToken(
+                    authHeader
+                );
 
-            if (!token) {
-                return res.status(401)
-                    .json({
-                        success: false,
-                        message:
-                            "Invalid token format"
-                    });
+            if (
+                !token
+            ) {
+
+                return unauthorized(
+                    res,
+                    "Authentication token required"
+                );
             }
 
             // verify token
@@ -62,60 +94,131 @@ const authMiddleware =
                     process.env.JWT_SECRET
                 );
 
-            // validate decoded payload
+            // validate payload
             if (
                 !decoded
-                || !decoded.id
+                ||
+                !decoded.id
             ) {
-                return res.status(401)
-                    .json({
-                        success: false,
-                        message:
-                            "Invalid token payload"
-                    });
+
+                return unauthorized(
+                    res,
+                    "Invalid token payload"
+                );
             }
 
             // attach user
             req.user = {
+
                 id:
-                    Number(decoded.id),
+                    Number(
+                        decoded.id
+                    ),
 
                 role:
                     decoded.role
                     || "user"
             };
+
             next();
 
         } catch (error) {
+
             console.error(
                 "AUTH ERROR:",
-                error
+                error.message
             );
-            let message =
-                "Unauthorized access";
 
+            // token expired
             if (
-                error.name
-                === "TokenExpiredError"
+                error.name ===
+                "TokenExpiredError"
             ) {
-                message =
-                    "Token expired";
 
-            } else if (
-                error.name
-                === "JsonWebTokenError"
-            ) {
-                message =
-                    "Invalid token";
+                return unauthorized(
+                    res,
+                    "Session expired"
+                );
             }
 
-            return res.status(401)
-                .json({
-                    success: false,
-                    message
-                });
+            // invalid token
+            if (
+                error.name ===
+                "JsonWebTokenError"
+            ) {
+
+                return unauthorized(
+                    res,
+                    "Invalid authentication token"
+                );
+            }
+
+            // malformed token
+            if (
+                error.name ===
+                "NotBeforeError"
+            ) {
+
+                return unauthorized(
+                    res,
+                    "Token not active"
+                );
+            }
+
+            return unauthorized(
+                res
+            );
         }
+    };
+
+// role authorization middleware
+const authorizeRoles =
+    (
+        ...roles
+    ) => {
+
+        return (
+            req,
+            res,
+            next
+        ) => {
+
+            if (
+                !req.user
+            ) {
+
+                return res.status(401)
+                    .json({
+
+                        success: false,
+
+                        message:
+                            "Authentication required"
+                    });
+            }
+
+            if (
+                !roles.includes(
+                    req.user.role
+                )
+            ) {
+
+                return res.status(403)
+                    .json({
+
+                        success: false,
+
+                        message:
+                            "Access denied"
+                    });
+            }
+
+            next();
+        };
     };
 
 module.exports =
     authMiddleware;
+
+module.exports.authorizeRoles =
+    authorizeRoles;

@@ -1,24 +1,148 @@
-const firebaseConfig = {
+// firebase app state
+let firebaseInitialized =
+    false;
 
-    apiKey: "AIzaSyA16yqEP8cO0MGJpPZMlqZH5Y4A48FopvU",
+// validate firebase sdk
+if (
+    typeof firebase ===
+    "undefined"
+) {
 
-    authDomain: "anthropicbots-ecommerce.firebaseapp.com",
+    console.error(
+        "Firebase SDK not loaded"
+    );
 
-    projectId: "anthropicbots-ecommerce",
+} else if (
 
-    storageBucket: "anthropicbots-ecommerce.firebasestorage.app",
+    !window.APP_CONFIG
+    ||
+    !window.APP_CONFIG.firebase
 
-    messagingSenderId: "145313639441",
+) {
 
-    appId: "1:145313639441:web:994a71088a3ed3c46d15b0"
-};
+    console.error(
+        "Firebase config missing"
+    );
 
-firebase.initializeApp(
-    firebaseConfig
-);
+} else {
 
-const auth =
-    firebase.auth();
+    try {
 
-const googleProvider =
-    new firebase.auth.GoogleAuthProvider();
+        // firebase config
+        const firebaseConfig =
+            window.APP_CONFIG.firebase;
+
+        // prevent duplicate initialization
+        if (
+            !firebase.apps.length
+        ) {
+
+            firebase.initializeApp(
+                firebaseConfig
+            );
+
+            console.log(
+                "Firebase initialized successfully"
+            );
+        }
+
+        firebaseInitialized =
+            true;
+
+        // auth instance
+        const firebaseAuth =
+            firebase.auth();
+
+        // auth provider
+        const googleProvider =
+            new firebase.auth.GoogleAuthProvider();
+
+        // provider settings
+        googleProvider.setCustomParameters({
+
+            prompt:
+                "select_account"
+        });
+
+        // persistence
+        firebaseAuth.setPersistence(
+            firebase.auth.Auth.Persistence.LOCAL
+        )
+
+            .then(
+                () => {
+
+                    console.log(
+                        "Firebase persistence enabled"
+                    );
+                }
+            )
+
+            .catch(
+                (
+                    error
+                ) => {
+
+                    console.error(
+                        "Firebase persistence error:",
+                        error
+                    );
+                }
+            );
+
+        // auth state listener
+        firebaseAuth.onAuthStateChanged(
+            (
+                user
+            ) => {
+
+                if (
+                    user
+                ) {
+
+                    console.log(
+                        "Firebase user authenticated:",
+                        user.email
+                    );
+
+                } else {
+
+                    console.log(
+                        "Firebase user signed out"
+                    );
+                }
+            }
+        );
+
+        // expose globally
+        window.firebaseInitialized =
+            firebaseInitialized;
+
+        window.firebaseAuth =
+            firebaseAuth;
+
+        window.googleProvider =
+            googleProvider;
+
+        // helper
+        window.isFirebaseReady =
+            () => {
+
+                return (
+                    firebaseInitialized
+                    &&
+                    !!window.firebaseAuth
+                );
+            };
+
+    } catch (error) {
+
+        console.error(
+            "Firebase initialization failed:",
+            error
+        );
+
+        window.firebaseInitialized =
+            false;
+    }
+}

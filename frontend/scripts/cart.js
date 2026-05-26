@@ -59,6 +59,41 @@ function saveCart() {
     }
 }
 
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
 // SAFE HELPERS
 function safePrice(
     value
@@ -205,11 +240,9 @@ function renderCart() {
         AppUtils.getCart();
 
     if (
-        !Array.isArray(
-            cart
-        )
-        ||
-        !cart.length
+       !AppUtils.safeArray(
+           cart
+       ).length
     ) {
 
         renderEmptyCart();
@@ -257,23 +290,23 @@ function renderCart() {
             cartItem.innerHTML =
                 `
                     <img
-                        src="${
+                        src="${escapeHTML(
                             AppUtils.defaultImage(
                                 item.img || item.image
                             )
-                        }"
-                        alt="${
+                        )}
+                        alt="${escapeHTML(
                             item.name || "Product"
-                        }"
+                        )}
                         loading="lazy"
                     >
 
                     <div class="cart-item-info">
 
                         <h3>
-                            ${
+                            ${escapeHTML(
                                 item.name || "Product"
-                            }
+                            )}
                         </h3>
 
                         <p>
@@ -290,7 +323,7 @@ function renderCart() {
                                 ? `
                                     <p>
                                         Color:
-                                        ${item.color}
+                                        ${escapeHTML(item.color)}
                                     </p>
                                 `
                                 : ""
@@ -301,7 +334,7 @@ function renderCart() {
                                 ? `
                                     <p>
                                         Size:
-                                        ${item.size}
+                                        ${escapeHTML(item.size)}
                                     </p>
                                 `
                                 : ""
@@ -400,9 +433,12 @@ document.addEventListener(
             }
 
             cart[index].qty =
-                safeQty(
-                    cart[index].qty
-                ) + 1;
+                Math.min(
+                    10,
+                    safeQty(
+                        cart[index].qty
+                    ) + 1
+                );
 
             saveCart();
 
@@ -626,44 +662,6 @@ async function addToCartFromProduct(
         "Added to cart 🛍️",
         "success"
     );
-
-    // backend sync
-    const token =
-        AppUtils.getToken();
-
-    if (
-        token
-    ) {
-        try {
-            const data =
-                await AppUtils.apiRequest(
-                    "/cart/add",
-                    {
-                        method: "POST",
-                        body:
-                            JSON.stringify(
-                                item
-                            )
-                    }
-                );
-            if (
-                !data.success
-            ) {
-                console.warn(
-                    "Backend cart sync failed"
-                );
-            }
-
-        } catch (
-            error
-        ) {
-
-            console.error(
-                "BACKEND CART ERROR:",
-                error
-            );
-        }
-    }
 
     if (
         elements.cartContainer

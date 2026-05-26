@@ -8,7 +8,14 @@ const crypto =
     require("crypto");
 
 const db =
-    require("../config/db");
+    require("../config/db").promise;
+
+const {
+    sanitizeString,
+    safeArray
+} = require(
+    "../utils/helpers"
+);
 
 // validation patterns
 const emailRegex =
@@ -18,44 +25,96 @@ const strongPasswordRegex =
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/;
 
 // environment validation
-if (!process.env.JWT_SECRET) {
+if (
+    !process.env.JWT_SECRET
+) {
+
     throw new Error(
         "JWT_SECRET environment variable is not set"
     );
 }
 
-// helper utilities
-const sanitizeString = (value) => {
-    return String(
-        value || ""
-    ).trim();
-};
+// generate access token
+function generateAccessToken(
+    user
+) {
 
-const generateAccessToken =
-    (user) => {
-        return jwt.sign(
-            {
-                id: user.id,
-                role: user.role
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "15m"
+    return jwt.sign(
+        {
+
+            id:
+                user.id,
+
+            role:
+                user.role
+        },
+
+        process.env.JWT_SECRET,
+
+        {
+            expiresIn:
+                process.env.JWT_EXPIRES_IN
+                || "15m"
+        }
+    );
+}
+
+// generate refresh token
+function generateRefreshToken() {
+
+    return crypto
+        .randomBytes(40)
+        .toString("hex");
+}
+
+// standard auth response
+function sendAuthResponse(
+    res,
+    {
+        message,
+        accessToken,
+        refreshToken,
+        user
+    }
+) {
+
+    return res.status(200)
+        .json({
+
+            success: true,
+
+            message,
+
+            accessToken,
+
+            refreshToken,
+
+            user: {
+
+                id:
+                    user.id,
+
+                name:
+                    user.name,
+
+                email:
+                    user.email,
+
+                role:
+                    user.role
             }
-        );
-    };
-
-const generateRefreshToken =
-    () => {
-        return crypto
-            .randomBytes(40)
-            .toString("hex");
-    };
+        });
+}
 
 // signup
 const signup =
-    async (req, res) => {
+    async (
+        req,
+        res
+    ) => {
+
         try {
+
             const {
                 name,
                 email,
@@ -63,21 +122,29 @@ const signup =
             } = req.body;
 
             const cleanName =
-                sanitizeString(name);
+                sanitizeString(
+                    name
+                );
 
             const cleanEmail =
-                sanitizeString(email)
-                    .toLowerCase();
+                sanitizeString(
+                    email
+                ).toLowerCase();
 
             // validation
             if (
                 !cleanName
-                || !cleanEmail
-                || !password
+                ||
+                !cleanEmail
+                ||
+                !password
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "All fields are required"
                     });
@@ -86,9 +153,12 @@ const signup =
             if (
                 cleanName.length < 2
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "Name must be at least 2 characters"
                     });
@@ -99,9 +169,12 @@ const signup =
                     cleanEmail
                 )
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "Invalid email format"
                     });
@@ -110,9 +183,12 @@ const signup =
             if (
                 password.length < 8
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "Password must be at least 8 characters"
                     });
@@ -122,110 +198,96 @@ const signup =
                 !strongPasswordRegex
                     .test(password)
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "Password must contain uppercase, lowercase, number and special character"
                     });
             }
 
-            // check existing user
-            db.query(
+            // existing user check
+            const [
+                existingUsers
+            ] = await db.query(
                 `
                     SELECT id
                     FROM users
                     WHERE email = ?
+                    LIMIT 1
                 `,
-                [cleanEmail],
-                async (
-                    error,
-                    result
-                ) => {
-                    if (error) {
-                        console.error(
-                            error
-                        );
-
-                        return res.status(500)
-                            .json({
-                                success: false,
-                                message:
-                                    "Server error"
-                            });
-                    }
-
-                    if (
-                        result.length > 0
-                    ) {
-                        return res.status(400)
-                            .json({
-                                success: false,
-                                message:
-                                    "User already exists"
-                            });
-                    }
-
-                    // hash password
-                    const hashedPassword =
-                        await bcrypt.hash(
-                            password,
-                            10
-                        );
-
-                    // insert user
-                    db.query(
-                        `
-                            INSERT INTO users
-                            (
-                                name,
-                                email,
-                                password,
-                                role
-                            )
-                            VALUES (?, ?, ?, ?)
-                        `,
-                        [
-                            cleanName,
-                            cleanEmail,
-                            hashedPassword,
-                            "user"
-                        ],
-                        (
-                            insertError
-                        ) => {
-                            if (
-                                insertError
-                            ) {
-                                console.error(
-                                    insertError
-                                );
-
-                                return res.status(500)
-                                    .json({
-                                        success: false,
-                                        message:
-                                            "Server error"
-                                    });
-                            }
-
-                            res.status(201)
-                                .json({
-                                    success: true,
-                                    message:
-                                        "User registered successfully"
-                                });
-                        }
-                    );
-                }
+                [
+                    cleanEmail
+                ]
             );
 
-        } catch (error) {
-            console.error(error);
+            if (
+                safeArray(
+                    existingUsers
+                ).length
+            ) {
 
-            res.status(500)
+                return res.status(400)
+                    .json({
+
+                        success: false,
+
+                        message:
+                            "User already exists"
+                    });
+            }
+
+            // hash password
+            const hashedPassword =
+                await bcrypt.hash(
+                    password,
+                    10
+                );
+
+            // create user
+            await db.query(
+                `
+                    INSERT INTO users
+                    (
+                        name,
+                        email,
+                        password,
+                        role
+                    )
+                    VALUES (?, ?, ?, ?)
+                `,
+                [
+                    cleanName,
+                    cleanEmail,
+                    hashedPassword,
+                    "user"
+                ]
+            );
+
+            return res.status(201)
                 .json({
+
+                    success: true,
+
+                    message:
+                        "User registered successfully"
+                });
+
+        } catch (error) {
+
+            console.error(
+                "SIGNUP ERROR:",
+                error
+            );
+
+            return res.status(500)
+                .json({
+
                     success: false,
+
                     message:
                         "Server error"
                 });
@@ -234,169 +296,158 @@ const signup =
 
 // login
 const login =
-    async (req, res) => {
+    async (
+        req,
+        res
+    ) => {
+
         try {
+
             const {
                 email,
                 password
             } = req.body;
 
             const cleanEmail =
-                sanitizeString(email)
-                    .toLowerCase();
+                sanitizeString(
+                    email
+                ).toLowerCase();
 
             if (
                 !cleanEmail
-                || !password
+                ||
+                !password
             ) {
+
                 return res.status(400)
                     .json({
+
                         success: false,
+
                         message:
                             "Email and password required"
                     });
             }
 
-            db.query(
+            // fetch user
+            const [
+                users
+            ] = await db.query(
                 `
                     SELECT *
                     FROM users
                     WHERE email = ?
+                    LIMIT 1
                 `,
-                [cleanEmail],
-                async (
-                    error,
-                    result
-                ) => {
-                    if (error) {
-                        console.error(
-                            error
-                        );
+                [
+                    cleanEmail
+                ]
+            );
 
-                        return res.status(500)
-                            .json({
-                                success: false,
-                                message:
-                                    "Server error"
-                            });
-                    }
+            if (
+                !safeArray(
+                    users
+                ).length
+            ) {
 
-                    if (
-                        !Array.isArray(result)
-                        || !result.length
-                    ) {
-                        return res.status(400)
-                            .json({
-                                success: false,
-                                message:
-                                    "Invalid credentials"
-                            });
-                    }
+                return res.status(400)
+                    .json({
 
-                    const user =
-                        result[0];
+                        success: false,
 
-                    // inactive account check
-                    if (
-                        user.isActive === 0
-                    ) {
-                        return res.status(403)
-                            .json({
-                                success: false,
-                                message:
-                                    "Account has been deactivated"
-                            });
-                    }
+                        message:
+                            "Invalid credentials"
+                    });
+            }
 
-                    const isMatch =
-                        await bcrypt.compare(
-                            password,
-                            user.password
-                        );
+            const user =
+                users[0];
 
-                    if (!isMatch) {
-                        return res.status(400)
-                            .json({
-                                success: false,
-                                message:
-                                    "Invalid credentials"
-                            });
-                    }
+            // inactive account
+            if (
+                user.isActive === 0
+            ) {
 
-                    // generate tokens
-                    const accessToken =
-                        generateAccessToken(
-                            user
-                        );
+                return res.status(403)
+                    .json({
 
-                    const refreshToken =
-                        generateRefreshToken();
+                        success: false,
 
-                    // save refresh token
-                    db.query(
-                        `
-                            UPDATE users
-                            SET refresh_token = ?
-                            WHERE id = ?
-                        `,
-                        [
-                            refreshToken,
-                            user.id
-                        ],
-                        (
-                            refreshError
-                        ) => {
-                            if (
-                                refreshError
-                            ) {
-                                console.error(
-                                    "Failed to save refresh token:",
-                                    refreshError
-                                );
+                        message:
+                            "Account has been deactivated"
+                    });
+            }
 
-                                return res.status(500)
-                                    .json({
-                                        success: false,
-                                        message:
-                                            "Server error"
-                                    });
-                            }
+            // password check
+            const isMatch =
+                await bcrypt.compare(
+                    password,
+                    user.password
+                );
 
-                            res.status(200)
-                                .json({
-                                    success: true,
-                                    message:
-                                        "Login successful",
+            if (
+                !isMatch
+            ) {
 
-                                    accessToken,
+                return res.status(400)
+                    .json({
 
-                                    refreshToken,
+                        success: false,
 
-                                    user: {
-                                        id:
-                                            user.id,
+                        message:
+                            "Invalid credentials"
+                    });
+            }
 
-                                        name:
-                                            user.name,
+            // generate tokens
+            const accessToken =
+                generateAccessToken(
+                    user
+                );
 
-                                        email:
-                                            user.email,
+            const refreshToken =
+                generateRefreshToken();
 
-                                        role:
-                                            user.role
-                                    }
-                                });
-                        }
-                    );
+            // save refresh token
+            await db.query(
+                `
+                    UPDATE users
+                    SET refresh_token = ?
+                    WHERE id = ?
+                `,
+                [
+                    refreshToken,
+                    user.id
+                ]
+            );
+
+            return sendAuthResponse(
+                res,
+                {
+
+                    message:
+                        "Login successful",
+
+                    accessToken,
+
+                    refreshToken,
+
+                    user
                 }
             );
 
         } catch (error) {
-            console.error(error);
 
-            res.status(500)
+            console.error(
+                "LOGIN ERROR:",
+                error
+            );
+
+            return res.status(500)
                 .json({
+
                     success: false,
+
                     message:
                         "Server error"
                 });
@@ -405,8 +456,13 @@ const login =
 
 // refresh access token
 const refreshAccessToken =
-    async (req, res) => {
+    async (
+        req,
+        res
+    ) => {
+
         try {
+
             const {
                 refreshToken
             } = req.body;
@@ -419,115 +475,105 @@ const refreshAccessToken =
             if (
                 !cleanRefreshToken
             ) {
+
                 return res.status(401)
                     .json({
+
                         success: false,
+
                         message:
                             "Refresh token required"
                     });
             }
 
-            db.query(
+            // fetch user
+            const [
+                users
+            ] = await db.query(
                 `
                     SELECT
                         id,
+                        name,
+                        email,
                         role
                     FROM users
                     WHERE refresh_token = ?
+                    LIMIT 1
                 `,
                 [
                     cleanRefreshToken
-                ],
-                (
-                    error,
-                    result
-                ) => {
-                    if (error) {
-                        console.error(
-                            error
-                        );
+                ]
+            );
 
-                        return res.status(500)
-                            .json({
-                                success: false,
-                                message:
-                                    "Server error"
-                            });
-                    }
+            if (
+                !safeArray(
+                    users
+                ).length
+            ) {
 
-                    if (
-                        !Array.isArray(result)
-                        || !result.length
-                    ) {
-                        return res.status(401)
-                            .json({
-                                success: false,
-                                message:
-                                    "Invalid refresh token"
-                            });
-                    }
+                return res.status(401)
+                    .json({
 
-                    const user =
-                        result[0];
+                        success: false,
 
-                    const newAccessToken =
-                        generateAccessToken(
-                            user
-                        );
+                        message:
+                            "Invalid refresh token"
+                    });
+            }
 
-                    // rotate refresh token
-                    const newRefreshToken =
-                        generateRefreshToken();
+            const user =
+                users[0];
 
-                    db.query(
-                        `
-                            UPDATE users
-                            SET refresh_token = ?
-                            WHERE id = ?
-                        `,
-                        [
-                            newRefreshToken,
-                            user.id
-                        ],
-                        (
-                            updateError
-                        ) => {
-                            if (
-                                updateError
-                            ) {
-                                console.error(
-                                    updateError
-                                );
+            // rotate tokens
+            const newAccessToken =
+                generateAccessToken(
+                    user
+                );
 
-                                return res.status(500)
-                                    .json({
-                                        success: false,
-                                        message:
-                                            "Server error"
-                                    });
-                            }
+            const newRefreshToken =
+                generateRefreshToken();
 
-                            res.status(200)
-                                .json({
-                                    success: true,
+            await db.query(
+                `
+                    UPDATE users
+                    SET refresh_token = ?
+                    WHERE id = ?
+                `,
+                [
+                    newRefreshToken,
+                    user.id
+                ]
+            );
 
-                                    accessToken:
-                                        newAccessToken,
+            return sendAuthResponse(
+                res,
+                {
 
-                                    refreshToken:
-                                        newRefreshToken
-                                });
-                        }
-                    );
+                    message:
+                        "Token refreshed",
+
+                    accessToken:
+                        newAccessToken,
+
+                    refreshToken:
+                        newRefreshToken,
+
+                    user
                 }
             );
 
         } catch (error) {
-            console.error(error);
 
-            res.status(500)
+            console.error(
+                "REFRESH TOKEN ERROR:",
+                error
+            );
+
+            return res.status(500)
                 .json({
+
                     success: false,
+
                     message:
                         "Server error"
                 });
@@ -535,7 +581,10 @@ const refreshAccessToken =
     };
 
 module.exports = {
+
     signup,
+
     login,
+
     refreshAccessToken
 };

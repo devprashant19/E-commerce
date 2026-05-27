@@ -3,17 +3,16 @@ const hostname =
     window.location.hostname;
 
 const isLocalhost =
-    hostname === "localhost"
-    ||
-    hostname === "127.0.0.1";
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("172.");
 
-// frontend config
 const CONFIG = {
     // api base url
     API_BASE:
-        isLocalhost
-            ? "http://localhost:5000/api"
-            : "http://localhost:5000/api",
+        "https://e-commerce-production-d546.up.railway.app/api",
 
     // app info
     APP_NAME:
@@ -24,7 +23,7 @@ const CONFIG = {
 
     // request settings
     REQUEST_TIMEOUT:
-        10000,
+        45000,
 
     // pagination
     PRODUCTS_PER_PAGE:

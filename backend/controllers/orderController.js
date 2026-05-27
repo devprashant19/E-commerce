@@ -7,31 +7,16 @@ const {
     "../services/order.service"
 );
 
-// helper utilities
-const safeNumber = (value) => {
-    const parsed =
-        parseFloat(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
-
-const safeInteger = (value) => {
-    const parsed =
-        parseInt(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
-
-const sanitizeString =
-    (value) => {
-        return String(
-            value || ""
-        ).trim();
-    };
+const {
+    safeNumber,
+    safeInteger,
+    sanitizeString,
+    getPagination,
+    buildPaginationMeta,
+    safeArray
+} = require(
+    "../utils/helpers"
+);
 
 // create order
 const createOrder =
@@ -206,29 +191,41 @@ const createOrder =
 
 // get all orders
 const getAllOrders =
-    (req, res) => {
-        const query = `
-            SELECT
-                id,
-                user_id,
-                customer_name,
-                customer_email,
-                payment_method,
-                total,
-                status,
-                created_at
+    (
+        req,
+        res
+    ) => {
+
+        const {
+            page,
+            limit,
+            offset
+        } = getPagination(
+            req.query.page,
+            req.query.limit,
+            50
+        );
+
+        const countQuery = `
+            SELECT COUNT(*) AS total
             FROM orders
-            ORDER BY id DESC
         `;
 
         db.query(
-            query,
+            countQuery,
             (
-                err,
-                results
+                countError,
+                countResults
             ) => {
-                if (err) {
-                    console.error(err);
+
+                if (
+                    countError
+                ) {
+
+                    console.error(
+                        countError
+                    );
+
                     return res.status(500)
                         .json({
                             success: false,
@@ -237,14 +234,77 @@ const getAllOrders =
                         });
                 }
 
-                res.status(200)
-                    .json({
-                        success: true,
-                        orders:
-                            Array.isArray(results)
-                                ? results
-                                : []
-                    });
+                const total =
+                    Number(
+                        countResults?.[0]?.total || 0
+                    );
+
+                const query = `
+                    SELECT
+                        id,
+                        user_id,
+                        customer_name,
+                        customer_email,
+                        payment_method,
+                        total,
+                        status,
+                        created_at
+                    FROM orders
+                    ORDER BY id DESC
+                    LIMIT ?
+                    OFFSET ?
+                `;
+
+                db.query(
+                    query,
+                    [
+                        limit,
+                        offset
+                    ],
+                    (
+                        err,
+                        results
+                    ) => {
+
+                        if (
+                            err
+                        ) {
+
+                            console.error(
+                                err
+                            );
+
+                            return res.status(500)
+                                .json({
+                                    success: false,
+                                    message:
+                                        "Server error"
+                                });
+                        }
+
+                        res.status(200)
+                            .json({
+                                success: true,
+
+                                page,
+
+                                limit,
+
+                                total,
+
+                                ...buildPaginationMeta(
+                                    total,
+                                    page,
+                                    limit
+                                ),
+
+                                orders:
+                                    safeArray(
+                                        results
+                                    )
+                            });
+                    }
+                );
             }
         );
     };
@@ -286,9 +346,7 @@ const getUserOrders =
                     .json({
                         success: true,
                         orders:
-                            Array.isArray(results)
-                                ? results
-                                : []
+                            safeArray(results)
                     });
             }
         );
@@ -311,15 +369,33 @@ const getOrderById =
                 });
         }
 
-        const query = `
+        let query = `
             SELECT *
             FROM orders
             WHERE id = ?
         `;
 
+        const queryParams = [
+            id
+        ];
+
+        // normal users can only access own orders
+        if (
+            req.user.role !== "admin"
+        ) {
+        
+            query += `
+                AND user_id = ?
+            `;
+        
+            queryParams.push(
+                req.user.id
+            );
+        }
+
         db.query(
             query,
-            [id],
+            queryParams,
             (
                 err,
                 results
@@ -335,8 +411,7 @@ const getOrderById =
                 }
 
                 if (
-                    !Array.isArray(results)
-                    || !results.length
+                    !safeArray(results).length
                 ) {
                     return res.status(404)
                         .json({

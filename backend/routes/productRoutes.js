@@ -19,31 +19,71 @@ const authMiddleware =
         "../middleware/authMiddleware"
     );
 
-const adminMiddleware =
-    require(
-        "../middleware/adminMiddleware"
-    );
+const {
+    authorizeRoles
+} = authMiddleware;
+
+const {
+    sanitizeString,
+    safeNumber
+} = require(
+    "../utils/helpers"
+);
 
 // validate product id
 router.param(
     "id",
-    (req, res, next, id) => {
+    (
+        req,
+        res,
+        next,
+        id
+    ) => {
+
         const parsedId =
-            parseInt(id);
+            parseInt(
+                id,
+                10
+            );
+
         if (
             !parsedId
             || parsedId < 1
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Invalid product ID"
                 });
         }
+
         req.productId =
             parsedId;
+
         next();
+    }
+);
+
+// product api status
+router.get(
+    "/status/check",
+    (
+        req,
+        res
+    ) => {
+
+        res.status(200)
+            .json({
+
+                success: true,
+
+                message:
+                    "Product API running"
+            });
     }
 );
 
@@ -63,8 +103,14 @@ router.get(
 router.post(
     "/",
     authMiddleware,
-    adminMiddleware,
-    (req, res, next) => {
+    authorizeRoles(
+        "admin"
+    ),
+    (
+        req,
+        res,
+        next
+    ) => {
 
         const {
             name,
@@ -72,28 +118,75 @@ router.post(
             price,
             stock
         } = req.body;
+
+        // validate name
         if (
-            !name?.trim()
-            || !category?.trim()
+            !sanitizeString(
+                name
+            )
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
-                        "Name and category are required"
+                        "Product name is required"
                 });
         }
+
+        // validate category
         if (
-            Number(price) < 0
-            || Number(stock) < 0
+            !sanitizeString(
+                category
+            )
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
-                        "Price and stock must be valid"
+                        "Product category is required"
                 });
         }
+
+        // validate price
+        if (
+            safeNumber(
+                price
+            ) < 0
+        ) {
+
+            return res.status(400)
+                .json({
+
+                    success: false,
+
+                    message:
+                        "Price must be valid"
+                });
+        }
+
+        // validate stock
+        if (
+            safeNumber(
+                stock
+            ) < 0
+        ) {
+
+            return res.status(400)
+                .json({
+
+                    success: false,
+
+                    message:
+                        "Stock must be valid"
+                });
+        }
+
         next();
     },
     createProduct
@@ -103,8 +196,14 @@ router.post(
 router.put(
     "/:id",
     authMiddleware,
-    adminMiddleware,
-    (req, res, next) => {
+    authorizeRoles(
+        "admin"
+    ),
+    (
+        req,
+        res,
+        next
+    ) => {
 
         const {
             name,
@@ -113,50 +212,82 @@ router.put(
             stock
         } = req.body;
 
+        // validate name
         if (
             name !== undefined
-            && !String(name).trim()
+            &&
+            !sanitizeString(
+                name
+            )
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Product name cannot be empty"
                 });
         }
+
+        // validate category
         if (
             category !== undefined
-            && !String(category).trim()
+            &&
+            !sanitizeString(
+                category
+            )
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Category cannot be empty"
                 });
         }
+
+        // validate price
         if (
             price !== undefined
-            && Number(price) < 0
+            &&
+            safeNumber(
+                price
+            ) < 0
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Price cannot be negative"
                 });
         }
+
+        // validate stock
         if (
             stock !== undefined
-            && Number(stock) < 0
+            &&
+            safeNumber(
+                stock
+            ) < 0
         ) {
+
             return res.status(400)
                 .json({
+
                     success: false,
+
                     message:
                         "Stock cannot be negative"
                 });
         }
+
         next();
     },
     updateProduct
@@ -166,19 +297,29 @@ router.put(
 router.delete(
     "/:id",
     authMiddleware,
-    adminMiddleware,
+    authorizeRoles(
+        "admin"
+    ),
     deleteProduct
 );
 
 // route fallback
-router.use((req, res) => {
+router.use(
+    (
+        req,
+        res
+    ) => {
 
-    res.status(404).json({
-        success: false,
-        message:
-            "Product route not found"
-    });
-});
+        res.status(404)
+            .json({
+
+                success: false,
+
+                message:
+                    "Product route not found"
+            });
+    }
+);
 
 module.exports =
     router;

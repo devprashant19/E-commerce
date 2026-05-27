@@ -1,34 +1,134 @@
 // admin auth
-const user =
-    AppUtils.getJSON(
-        "user"
-    );
-
 const token =
     AppUtils.getToken();
 
-// protect route
+// auth state
+let currentAdmin =
+    null;
+
+// pagination state
+let currentProductPage =
+    1;
+
+let currentOrderPage =
+    1;
+
+const PAGE_LIMIT =
+    10;
+
+// app state
+let products = [];
+
+let orders = [];
+
+// require authentication
 if (
     !token
-    ||
-    !user
-    ||
-    user.role !== "admin"
 ) {
+
+    redirectUnauthorized();
+}
+
+// secure admin verification
+async function verifyAdminAccess() {
+
+    try {
+
+        const response =
+            await AppUtils.apiRequest(
+                "/auth/me"
+            );
+
+        if (
+            !response.success
+            ||
+            !response.user
+            ||
+            response.user.role !== "admin"
+        ) {
+
+            redirectUnauthorized();
+
+            return false;
+        }
+
+        currentAdmin =
+            response.user;
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            "ADMIN VERIFY ERROR:",
+            error
+        );
+
+        redirectUnauthorized();
+
+        return false;
+    }
+}
+
+// unauthorized redirect
+function redirectUnauthorized() {
+
     AppUtils.notify(
         "Admin access required",
         "error"
     );
 
-    setTimeout(() => {
-        window.location.href =
-            "signin.html";
-    }, 1000);
+    AppUtils.clearAuthData();
 
-} else {
+    setTimeout(
+        () => {
+
+            window.location.href =
+                "signin.html";
+
+        },
+        1000
+    );
+}
+
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
 
 // elements
 const elements = {
+
     productForm:
         document.getElementById(
             "product-form"
@@ -100,15 +200,13 @@ const elements = {
         )
 };
 
-// state
-let products = [];
-let orders = [];
-
-// loading
+// loading state
 function renderLoadingState() {
+
     if (
         elements.productTableBody
     ) {
+
         elements.productTableBody.innerHTML =
             `
                 <tr>
@@ -122,46 +220,49 @@ function renderLoadingState() {
 
 // load initial data
 async function loadInitialData() {
+
     renderLoadingState();
 
     try {
+
         const productsRes =
             await AppUtils.apiRequest(
-                "/products"
+                `/products?page=${currentProductPage}&limit=${PAGE_LIMIT}`
             );
 
         if (
             productsRes.success
         ) {
+
             products =
-                Array.isArray(
+                AppUtils.safeArray(
                     productsRes.products
-                )
-                    ? productsRes.products
-                    : [];
+                );
         }
 
         const ordersRes =
             await AppUtils.apiRequest(
-                "/orders"
+                `/orders?page=${currentOrderPage}&limit=${PAGE_LIMIT}`
             );
 
         if (
             ordersRes.success
         ) {
+
             orders =
-                Array.isArray(
+                AppUtils.safeArray(
                     ordersRes.orders
-                )
-                    ? ordersRes.orders
-                    : [];
+                );
         }
 
         renderProducts();
+
         renderOrders();
+
         renderStats();
 
     } catch (error) {
+
         console.error(
             "ADMIN LOAD ERROR:",
             error
@@ -170,6 +271,7 @@ async function loadInitialData() {
         if (
             elements.productTableBody
         ) {
+
             elements.productTableBody.innerHTML =
                 `
                     <tr>
@@ -182,11 +284,13 @@ async function loadInitialData() {
     }
 }
 
-// stats
+// render stats
 function renderStats() {
+
     if (
         elements.totalOrders
     ) {
+
         elements.totalOrders.innerText =
             orders.length;
     }
@@ -194,6 +298,7 @@ function renderStats() {
     if (
         elements.totalProducts
     ) {
+
         elements.totalProducts.innerText =
             products.length;
     }
@@ -201,6 +306,7 @@ function renderStats() {
     if (
         elements.totalUsers
     ) {
+
         elements.totalUsers.innerText =
             localStorage.getItem(
                 "visits"
@@ -209,7 +315,11 @@ function renderStats() {
 
     const revenue =
         orders.reduce(
-            (sum, order) => {
+            (
+                sum,
+                order
+            ) => {
+
                 return (
                     sum +
                     (
@@ -218,6 +328,7 @@ function renderStats() {
                         ) || 0
                     )
                 );
+
             },
             0
         );
@@ -225,6 +336,7 @@ function renderStats() {
     if (
         elements.totalRevenue
     ) {
+
         elements.totalRevenue.innerText =
             AppUtils.formatPrice(
                 revenue
@@ -236,11 +348,13 @@ function renderStats() {
 function validateProduct(
     product
 ) {
+
     if (
         !product.name.trim()
         ||
         !product.category.trim()
     ) {
+
         AppUtils.notify(
             "Product name and category are required.",
             "error"
@@ -254,6 +368,7 @@ function validateProduct(
         ||
         product.stock < 0
     ) {
+
         AppUtils.notify(
             "Invalid price or stock.",
             "error"
@@ -267,7 +382,9 @@ function validateProduct(
 
 // product payload
 function getProductPayload() {
+
     return {
+
         name:
             elements.productName.value.trim(),
 
@@ -300,9 +417,13 @@ function getProductPayload() {
 if (
     elements.productForm
 ) {
+
     elements.productForm.addEventListener(
         "submit",
-        async (event) => {
+        async (
+            event
+        ) => {
+
             event.preventDefault();
 
             const productData =
@@ -313,15 +434,20 @@ if (
                     productData
                 )
             ) {
+
                 return;
             }
 
             try {
+
                 const response =
                     await AppUtils.apiRequest(
                         "/products",
                         {
-                            method: "POST",
+
+                            method:
+                                "POST",
+
                             body:
                                 JSON.stringify(
                                     productData
@@ -332,6 +458,7 @@ if (
                 if (
                     response.success
                 ) {
+
                     AppUtils.notify(
                         "Product added successfully!",
                         "success"
@@ -342,14 +469,17 @@ if (
                     await loadInitialData();
 
                 } else {
+
                     AppUtils.notify(
-                        response.message ||
+                        response.message
+                        ||
                         "Failed to add product.",
                         "error"
                     );
                 }
 
             } catch (error) {
+
                 console.error(
                     "ADD PRODUCT ERROR:",
                     error
@@ -366,9 +496,11 @@ if (
 
 // render products
 function renderProducts() {
+
     if (
         !elements.productTableBody
     ) {
+
         return;
     }
 
@@ -378,6 +510,7 @@ function renderProducts() {
     if (
         !products.length
     ) {
+
         elements.productTableBody.innerHTML =
             `
                 <tr>
@@ -393,13 +526,19 @@ function renderProducts() {
     const fragment =
         document.createDocumentFragment();
 
-    products.forEach(
-        (product) => {
+    AppUtils.safeArray(
+        products
+    ).forEach(
+        (
+            product
+        ) => {
+
             if (
                 !product
                 ||
                 !product.id
             ) {
+
                 return;
             }
 
@@ -411,17 +550,21 @@ function renderProducts() {
             row.innerHTML =
                 `
                     <td>
-                        ${product.name || "Product"}
+                        ${escapeHTML(product.name || "Product")}
                     </td>
+
                     <td>
-                        ${product.category || "Category"}
+                        ${escapeHTML(product.category || "Category")}
                     </td>
+
                     <td>
                         ${AppUtils.formatPrice(product.price || 0)}
                     </td>
+
                     <td>
                         ${product.stock || 0}
                     </td>
+
                     <td>
                         ${
                             product.featured
@@ -429,6 +572,7 @@ function renderProducts() {
                                 : "—"
                         }
                     </td>
+
                     <td>
                         <button
                             type="button"
@@ -451,6 +595,7 @@ function renderProducts() {
             )?.addEventListener(
                 "click",
                 () => {
+
                     editProduct(
                         product.id
                     );
@@ -462,6 +607,7 @@ function renderProducts() {
             )?.addEventListener(
                 "click",
                 () => {
+
                     deleteProduct(
                         product.id
                     );
@@ -483,6 +629,7 @@ function renderProducts() {
 async function deleteProduct(
     id
 ) {
+
     const confirmed =
         confirm(
             "Delete this product permanently?"
@@ -491,28 +638,39 @@ async function deleteProduct(
     if (
         !confirmed
     ) {
+
         return;
     }
 
     try {
+
         const response =
             await AppUtils.apiRequest(
                 `/products/${id}`,
                 {
-                    method: "DELETE"
+                    method:
+                        "DELETE"
                 }
             );
 
         if (
             response.success
         ) {
+
             products =
                 products.filter(
-                    (product) =>
-                        product.id !== id
+                    (
+                        product
+                    ) => {
+
+                        return (
+                            product.id !== id
+                        );
+                    }
                 );
 
             renderProducts();
+
             renderStats();
 
             AppUtils.notify(
@@ -521,14 +679,17 @@ async function deleteProduct(
             );
 
         } else {
+
             AppUtils.notify(
-                response.message ||
+                response.message
+                ||
                 "Failed to delete product.",
                 "error"
             );
         }
 
     } catch (error) {
+
         console.error(
             "DELETE PRODUCT ERROR:",
             error
@@ -545,15 +706,21 @@ async function deleteProduct(
 async function editProduct(
     id
 ) {
+
     const product =
         products.find(
-            (p) =>
-                p.id === id
+            (
+                p
+            ) => {
+
+                return p.id === id;
+            }
         );
 
     if (
         !product
     ) {
+
         return;
     }
 
@@ -578,10 +745,15 @@ async function editProduct(
     if (
         !newName?.trim()
         ||
-        isNaN(newPrice)
+        isNaN(
+            newPrice
+        )
         ||
-        isNaN(newStock)
+        isNaN(
+            newStock
+        )
     ) {
+
         AppUtils.notify(
             "Invalid product details.",
             "error"
@@ -591,6 +763,7 @@ async function editProduct(
     }
 
     const updatedData = {
+
         name:
             newName.trim(),
 
@@ -619,11 +792,15 @@ async function editProduct(
     };
 
     try {
+
         const response =
             await AppUtils.apiRequest(
                 `/products/${id}`,
                 {
-                    method: "PUT",
+
+                    method:
+                        "PUT",
+
                     body:
                         JSON.stringify(
                             updatedData
@@ -634,12 +811,14 @@ async function editProduct(
         if (
             response.success
         ) {
+
             Object.assign(
                 product,
                 updatedData
             );
 
             renderProducts();
+
             renderStats();
 
             AppUtils.notify(
@@ -648,14 +827,17 @@ async function editProduct(
             );
 
         } else {
+
             AppUtils.notify(
-                response.message ||
+                response.message
+                ||
                 "Failed to update product.",
                 "error"
             );
         }
 
     } catch (error) {
+
         console.error(
             "EDIT PRODUCT ERROR:",
             error
@@ -670,9 +852,11 @@ async function editProduct(
 
 // render orders
 function renderOrders() {
+
     if (
         !elements.ordersTableBody
     ) {
+
         return;
     }
 
@@ -682,6 +866,7 @@ function renderOrders() {
     if (
         !orders.length
     ) {
+
         elements.ordersTableBody.innerHTML =
             `
                 <tr>
@@ -697,11 +882,17 @@ function renderOrders() {
     const fragment =
         document.createDocumentFragment();
 
-    orders.forEach(
-        (order) => {
+    AppUtils.safeArray(
+        orders
+    ).forEach(
+        (
+            order
+        ) => {
+
             if (
                 !order
             ) {
+
                 return;
             }
 
@@ -713,11 +904,13 @@ function renderOrders() {
             row.innerHTML =
                 `
                     <td>
-                        ${order.id || "-"}
+                        ${escapeHTML(order.id || "-")}
                     </td>
+
                     <td>
-                        ${order.date || "-"}
+                        ${escapeHTML(order.created_at || "-")}
                     </td>
+
                     <td>
                         ${AppUtils.formatPrice(order.total || 0)}
                     </td>
@@ -737,9 +930,18 @@ function renderOrders() {
 // init
 document.addEventListener(
     "DOMContentLoaded",
-    () => {
-        loadInitialData();
+    async () => {
+
+        const hasAccess =
+            await verifyAdminAccess();
+
+        if (
+            !hasAccess
+        ) {
+
+            return;
+        }
+
+        await loadInitialData();
     }
 );
-
-}

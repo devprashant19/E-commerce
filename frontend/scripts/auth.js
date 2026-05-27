@@ -48,6 +48,11 @@ const elements = {
     logoutBtn:
         document.getElementById(
             "logout-btn"
+        ),
+
+    googleLogin:
+        document.getElementById(
+            "google-login"
         )
 };
 
@@ -96,6 +101,15 @@ async function loginUser(
     );
 }
 
+async function logoutUser() {
+    return await AppUtils.apiRequest(
+        "/auth/logout",
+        {
+            method: "POST"
+        }
+    );
+}
+
 // loading state
 function toggleFormLoading(
     button,
@@ -137,32 +151,62 @@ function saveAuthSession(
     }
 
     localStorage.setItem(
-        "token",
+        CONFIG.STORAGE_KEYS.TOKEN,
         response.accessToken || ""
     );
 
     localStorage.setItem(
-        "refreshToken",
+        CONFIG.STORAGE_KEYS.REFRESH_TOKEN,
         response.refreshToken || ""
     );
 
     AppUtils.setJSON(
-        "user",
+        CONFIG.STORAGE_KEYS.USER,
         response.user || {}
     );
 }
 
 // clear auth
-function clearAuthSession() {
-    AppUtils.clearAuthData();
+async function clearAuthSession() {
 
-    localStorage.removeItem(
-        "cart"
-    );
+    try {
 
-    localStorage.removeItem(
-        "wishlist"
-    );
+        // invalidate refresh token
+        if (
+            AppUtils.getToken()
+        ) {
+
+            await logoutUser();
+        }
+
+    } catch (error) {
+
+        console.error(
+            "LOGOUT API ERROR:",
+            error
+        );
+
+    } finally {
+
+        // always clear local session
+        AppUtils.clearAuthData();
+
+        AppUtils.setJSON(
+            "socialUser",
+        );
+
+        try {
+
+            await firebase.auth().signOut();
+
+        } catch (firebaseError) {
+
+            console.error(
+                "FIREBASE LOGOUT ERROR:",
+                firebaseError
+            );
+        }
+    }
 }
 
 // signup
@@ -398,44 +442,87 @@ if (
 }
 
 // auth ui
-const token =
-    AppUtils.getToken();
 
-if (
-    elements.authLink
-) {
+function initializeAuthUI() {
+    const authLink =
+        document.getElementById(
+            "auth-link"
+        );
+
+    const dropdown =
+        document.getElementById(
+            "profile-dropdown"
+        );
+
+    const logoutBtn =
+        document.getElementById(
+            "logout-btn"
+        );
+
+    if (!authLink) {
+        return;
+    }
+
+    const token =
+        AppUtils.getToken();
+    
+    // invalid token cleanup
     if (
         token
+        &&
+        !AppUtils.getUser()
     ) {
-        elements.authLink.innerHTML =
-            `<i class="fas fa-user"></i>`;
 
-        elements.authLink.href =
+        AppUtils.clearAuthData();
+    }
+
+    const socialUser =
+        AppUtils.getJSON(
+            "socialUser",
+            null
+        );
+
+    if (
+        token
+        || socialUser
+    ) {
+        authLink.innerHTML =
+            socialUser?.image
+                ? `
+                    <img
+                        src="${escapeHTML(
+                            socialUser.image
+                        )}"
+                        alt="profile"
+                        class="nav-profile-image"
+                    >
+                  `
+
+                : `<i class="fas fa-user"></i>`;
+
+        authLink.href =
             "#";
 
-        elements.authLink.classList.add(
+        authLink.classList.add(
             "profile-active"
         );
 
-        // open dropdown
-        elements.authLink.addEventListener(
+        authLink.addEventListener(
             "click",
             (event) => {
                 event.preventDefault();
-
-                elements.dropdown?.classList.toggle(
+                dropdown?.classList.toggle(
                     "active"
                 );
             }
         );
 
-        // logout
-        elements.logoutBtn?.addEventListener(
+        logoutBtn?.addEventListener(
             "click",
-            () => {
-                clearAuthSession();
+            async () => {
+                await clearAuthSession();
 
-                elements.dropdown?.classList.remove(
+                dropdown?.classList.remove(
                     "active"
                 );
 
@@ -446,54 +533,93 @@ if (
 
                 setTimeout(() => {
                     window.location.href =
-                        "index.html";
+                        document.referrer?.includes(
+                            window.location.hostname
+                        )
+                            ? document.referrer
+                            : "index.html";
+
                 }, 1000);
             }
         );
-
-        // outside click
-        document.addEventListener(
-            "click",
-            (event) => {
-                if (
-                    !event.target.closest(
-                        ".profile-wrapper"
-                    )
-                ) {
-                    elements.dropdown?.classList.remove(
-                        "active"
-                    );
-                }
-            }
-        );
-
-        // escape close
-        document.addEventListener(
-            "keydown",
-            (event) => {
-                if (
-                    event.key === "Escape"
-                ) {
-                    elements.dropdown?.classList.remove(
-                        "active"
-                    );
-                }
-            }
-        );
-
     } else {
-        elements.authLink.innerHTML =
+        authLink.innerHTML =
             "Sign In";
 
-        elements.authLink.href =
+        authLink.href =
             "signin.html";
 
-        elements.authLink.classList.remove(
+        authLink.classList.remove(
             "profile-active"
         );
 
-        elements.dropdown?.classList.remove(
+        dropdown?.classList.remove(
             "active"
         );
     }
 }
+
+/* wait for navbar components */
+document.addEventListener(
+    "componentsLoaded",
+    () => {
+
+        initializeAuthUI();
+    }
+);
+
+// google login 
+elements.googleLogin?.addEventListener(
+    "click",
+    async () => {
+        try {
+            const result =
+                await auth.signInWithPopup(
+                    googleProvider
+                );
+
+            const user =
+                result.user;
+
+            AppUtils.notify(
+                `Welcome ${user.displayName}!`,
+                "success"
+            );
+
+            localStorage.setItem(
+                "socialUser",
+                JSON.stringify({
+                    name:
+                        user.displayName,
+
+                    email:
+                        user.email,
+
+                    image:
+                        user.photoURL,
+
+                    provider:
+                        "google"
+                })
+            );
+
+            setTimeout(() => {
+                window.location.href =
+                    "index.html";
+
+            }, 1000);
+
+        } catch (error) {
+            console.error(
+                "GOOGLE LOGIN ERROR:",
+                error
+            );
+
+            AppUtils.notify(
+                error.message ||
+                "Google login failed.",
+                "error"
+            );
+        }
+    }
+);

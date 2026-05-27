@@ -1,9 +1,12 @@
+(() => {
+
 console.log(
     "Product page loaded successfully!"
 );
 
-// PRODUCT PAGE ELEMENTS
-const elements = {
+// product page elements
+const productElements = {
+
     mainImage:
         document.getElementById(
             "main-product-image"
@@ -90,11 +93,15 @@ const elements = {
         )
 };
 
-// PRODUCT STATE
+// product state
 let currentProductData =
     null;
 
-// PRODUCT ID
+// loading state
+let isLoading =
+    false;
+
+// product id
 const urlParams =
     new URLSearchParams(
         window.location.search
@@ -106,12 +113,15 @@ const productId =
         10
     );
 
-// invalid id fallback
+// invalid product id
 if (
-    Number.isNaN(productId)
+    Number.isNaN(
+        productId
+    )
     ||
     productId <= 0
 ) {
+
     window.location.href =
         "shop.html";
 
@@ -120,27 +130,78 @@ if (
     );
 }
 
-// FALLBACK PRODUCT
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
+// safe quantity
+function safeQty(
+    value
+) {
+
+    return Math.max(
+        1,
+        parseInt(
+            value,
+            10
+        ) || 1
+    );
+}
+
+// fallback product
 function getFallbackProduct() {
+
     return {
+
         id: 1,
 
         brand:
             "AnthropicBots",
 
         name:
-            "Modern Fashion T-Shirt",
+            "Nike Hoodie",
 
         category:
-            "T-Shirt",
+            "Fashion",
 
-        price: 999,
+        price: 2999,
 
         image:
-            "assets/images/f1.png",
+            "/assets/images/f1.jpg",
 
         description:
-            "Premium quality cotton t-shirt with breathable fabric and modern fashion styling.",
+            "Premium cotton hoodie with modern fashion styling and comfortable fit.",
 
         stock: 12,
 
@@ -150,23 +211,57 @@ function getFallbackProduct() {
     };
 }
 
-// LOADING STATE
+// loading state
 function showLoadingState() {
+
     document.body.classList.add(
         "loading"
     );
 }
 
 function hideLoadingState() {
+
     document.body.classList.remove(
         "loading"
     );
 }
 
-// FETCH PRODUCT
+// cache helpers
+function getCachedProduct() {
+
+    return AppUtils.getJSON(
+        `product-${productId}`,
+        null
+    );
+}
+
+function cacheProduct(
+    product
+) {
+
+    AppUtils.setJSON(
+        `product-${productId}`,
+        product
+    );
+}
+
+// fetch product
 async function fetchProduct() {
+
+    if (
+        isLoading
+    ) {
+
+        return;
+    }
+
+    isLoading =
+        true;
+
     showLoadingState();
+
     try {
+
         const response =
             await AppUtils.apiRequest(
                 `/products/${productId}`
@@ -181,241 +276,606 @@ async function fetchProduct() {
             currentProductData =
                 response.product;
 
-            sessionStorage.setItem(
-                `product-${productId}`,
-                JSON.stringify(
-                    response.product
-                )
+            cacheProduct(
+                response.product
             );
 
         } else {
-            console.warn(
-                "Using fallback product"
-            );
 
             currentProductData =
+                getCachedProduct()
+                ||
                 getFallbackProduct();
         }
 
     } catch (error) {
+
         console.error(
             "PRODUCT FETCH ERROR:",
             error
         );
 
-        let cached =
-            null;
-
-        try {
-            cached =
-                sessionStorage.getItem(
-                    `product-${productId}`
-                );
-
-            cached =
-                cached
-                    ? JSON.parse(
-                        cached
-                    )
-                    : null;
-
-        } catch (
-            storageError
-        ) {
-            console.error(
-                "CACHE PARSE ERROR:",
-                storageError
-            );
-        }
-
         currentProductData =
-            cached ||
+            getCachedProduct()
+            ||
             getFallbackProduct();
+
+    } finally {
+
+        initializeProductPage();
+
+        hideLoadingState();
+
+        isLoading =
+            false;
     }
-    initializeProductPage();
-    hideLoadingState();
 }
 
-// INITIALIZE PAGE
+// initialize page
 function initializeProductPage() {
+
     const product =
         currentProductData;
 
     if (
         !product
     ) {
+
         return;
     }
 
-    // disable actions if out of stock
+    // out of stock
     if (
         Number(
             product.stock
         ) <= 0
     ) {
+
         if (
-            elements.addToCartBtn
+            productElements.addToCartBtn
         ) {
 
-            elements.addToCartBtn.disabled =
+            productElements.addToCartBtn.disabled =
                 true;
 
-            elements.addToCartBtn.innerText =
+            productElements.addToCartBtn.innerText =
                 "Out of Stock";
         }
 
         if (
-            elements.buyNowBtn
+            productElements.buyNowBtn
         ) {
 
-            elements.buyNowBtn.disabled =
+            productElements.buyNowBtn.disabled =
                 true;
         }
     }
 
-    // render product
-    if (
-        typeof renderProduct ===
-        "function"
-    ) {
-        renderProduct(
-            product
-        );
-    }
+    renderProduct(
+        product
+    );
 
-    // setup variants
     if (
         typeof setupVariants ===
         "function"
     ) {
+
         setupVariants(
             product
         );
     }
 
-    // setup actions
-    if (
-        typeof setCurrentProduct ===
-        "function"
-    ) {
-        setCurrentProduct(
-            product
-        );
-    }
+    setupCartActions(
+        product
+    );
 
-    // load reviews
     if (
         typeof loadProductReviews ===
         "function"
     ) {
+
         loadProductReviews(
             product.id
         );
     }
 
-    // related products
     if (
         typeof loadRelatedProducts ===
         "function"
     ) {
+
         loadRelatedProducts(
             product
         );
     }
 
-    // recommendations
     if (
         typeof loadRecentlyViewedRecommendations ===
         "function"
     ) {
+
         loadRecentlyViewedRecommendations();
     }
+
     initializeImageZoom();
+
+    initializeProductGallery(
+        product
+    );
 }
 
-// IMAGE ZOOM
-function initializeImageZoom() {
+// add to cart
+function addProductToCart(
+    product,
+    redirect = false
+) {
+
     if (
-        !elements.mainImage
+        !product
     ) {
+
+        return;
+    }
+
+    if (
+        Number(
+            product.stock
+        ) <= 0
+    ) {
+
+        AppUtils.notify(
+            "Product is out of stock",
+            "error"
+        );
+
+        return;
+    }
+
+    let cart =
+        AppUtils.getCart();
+
+    cart =
+        AppUtils.safeArray(
+            cart
+        );
+
+    const existing =
+        cart.find(
+            (
+                item
+            ) => {
+
+                return (
+                    Number(
+                        item.id
+                    ) ===
+                    Number(
+                        product.id
+                    )
+                );
+            }
+        );
+
+    const qty =
+        safeQty(
+            productElements.qtyInput
+                ?.value || 1
+        );
+
+    if (
+        existing
+    ) {
+
+        existing.qty =
+            Math.min(
+                10,
+                safeQty(
+                    existing.qty
+                ) + qty
+            );
+
+    } else {
+
+        cart.push({
+
+            id:
+                product.id,
+
+            name:
+                product.name,
+
+            price:
+                product.price,
+
+            image:
+                product.image,
+
+            qty,
+
+            stock:
+                product.stock
+        });
+    }
+
+    AppUtils.saveCart(
+        cart
+    );
+
+    AppUtils.notify(
+        `${product.name} added to cart`,
+        "success"
+    );
+
+    if (
+        typeof updateCartCount ===
+        "function"
+    ) {
+
+        updateCartCount();
+    }
+
+    if (
+        redirect
+    ) {
+
+        window.location.href =
+            "cart.html";
+    }
+}
+
+// setup cart actions
+function setupCartActions(
+    product
+) {
+
+    if (
+        productElements.addToCartBtn
+    ) {
+
+        productElements.addToCartBtn.onclick =
+            () => {
+
+                addProductToCart(
+                    product
+                );
+            };
+    }
+
+    if (
+        productElements.buyNowBtn
+    ) {
+
+        productElements.buyNowBtn.onclick =
+            () => {
+
+                addProductToCart(
+                    product,
+                    true
+                );
+            };
+    }
+}
+
+// render product
+function renderProduct(
+    product
+) {
+
+    if (
+        !product
+    ) {
+
+        return;
+    }
+
+    // image
+    if (
+        productElements.mainImage
+    ) {
+
+        productElements.mainImage.src =
+            escapeHTML(
+                product.image
+                ||
+                "/assets/images/f1.jpg"
+            );
+
+        productElements.mainImage.alt =
+            escapeHTML(
+                product.name
+                || "Product"
+            );
+
+        productElements.mainImage.onerror =
+            () => {
+
+                productElements.mainImage.src =
+                    "/assets/images/f1.jpg";
+            };
+    }
+
+    // category
+    if (
+        productElements.productCategory
+    ) {
+
+        productElements.productCategory.innerText =
+            product.category
+            || "Fashion";
+    }
+
+    // name
+    if (
+        productElements.productName
+    ) {
+
+        productElements.productName.innerText =
+            product.name
+            || "Product Name";
+    }
+
+    // price
+    if (
+        productElements.productPrice
+    ) {
+
+        productElements.productPrice.innerText =
+            AppUtils.formatPrice(
+                product.price || 0
+            );
+    }
+
+    // original price
+    if (
+        productElements.productOriginalPrice
+    ) {
+
+        const productPrice =
+            parseFloat(
+                product.price || 0
+            );
+
+        const originalPrice =
+            productPrice + 1000;
+
+        productElements.productOriginalPrice.innerText =
+            AppUtils.formatPrice(
+                originalPrice
+            );
+    }
+
+    // discount
+    if (
+        productElements.productDiscount
+    ) {
+
+        productElements.productDiscount.innerText =
+            `${
+                product.discount_percent
+                || 50
+            }% OFF`;
+    }
+
+    // brand
+    if (
+        productElements.productBrand
+    ) {
+
+        productElements.productBrand.innerText =
+            product.brand
+            || "Fashion";
+    }
+
+    // description
+    if (
+        productElements.productDescription
+    ) {
+
+        productElements.productDescription.innerText =
+            product.description
+            || "Premium fashion product.";
+    }
+
+    // stock
+    if (
+        productElements.productStock
+    ) {
+
+        productElements.productStock.innerText =
+            Number(
+                product.stock
+            ) > 0
+                ? "In Stock"
+                : "Out Of Stock";
+    }
+
+    // page title
+    document.title =
+        `${product.name} | AnthropicBots E-Commerce`;
+}
+
+// image zoom
+function initializeImageZoom() {
+
+    if (
+        !productElements.mainImage
+    ) {
+
         return;
     }
 
     // avoid duplicate listeners
     if (
-        elements.mainImage.dataset.zoomReady
+        productElements.mainImage.dataset.zoomReady
     ) {
+
         return;
     }
 
-    elements.mainImage.dataset.zoomReady =
+    productElements.mainImage.dataset.zoomReady =
         "true";
 
-    elements.mainImage.style.transition =
+    productElements.mainImage.style.transition =
         "0.3s ease";
 
-    elements.mainImage.addEventListener(
+    productElements.mainImage.addEventListener(
         "mouseenter",
         () => {
-            elements.mainImage.style.transform =
+
+            productElements.mainImage.style.transform =
                 "scale(1.05)";
         }
     );
 
-    elements.mainImage.addEventListener(
+    productElements.mainImage.addEventListener(
         "mouseleave",
         () => {
-            elements.mainImage.style.transform =
+
+            productElements.mainImage.style.transform =
                 "scale(1)";
         }
     );
 }
 
-// KEYBOARD ACCESSIBILITY
+// gallery
+function initializeProductGallery(
+    product
+) {
+
+    const thumbnails =
+        document.querySelectorAll(
+            ".small-image"
+        );
+
+    if (
+        !thumbnails.length
+    ) {
+
+        return;
+    }
+
+    thumbnails.forEach(
+        (
+            thumb
+        ) => {
+
+            thumb.src =
+                product.image
+                ||
+                "/assets/images/f1.jpg";
+
+            thumb.onclick =
+                () => {
+
+                    if (
+                        productElements.mainImage
+                    ) {
+
+                        productElements.mainImage.src =
+                            thumb.src;
+                    }
+                };
+        }
+    );
+}
+
+// quantity controls
+if (
+    productElements.plusBtn
+) {
+
+    productElements.plusBtn.addEventListener(
+        "click",
+        () => {
+
+            productElements.qtyInput.value =
+                Math.min(
+                    10,
+                    safeQty(
+                        productElements.qtyInput.value
+                    ) + 1
+                );
+        }
+    );
+}
+
+if (
+    productElements.minusBtn
+) {
+
+    productElements.minusBtn.addEventListener(
+        "click",
+        () => {
+
+            productElements.qtyInput.value =
+                Math.max(
+                    1,
+                    safeQty(
+                        productElements.qtyInput.value
+                    ) - 1
+                );
+        }
+    );
+}
+
+// keyboard accessibility
 document.addEventListener(
     "keydown",
-    (event) => {
+    (
+        event
+    ) => {
+
         const activeTag =
             document.activeElement
                 ?.tagName;
 
         if (
-            ["INPUT", "TEXTAREA"]
-                .includes(
-                    activeTag
-                )
+            [
+                "INPUT",
+                "TEXTAREA"
+            ].includes(
+                activeTag
+            )
         ) {
+
             return;
         }
 
         if (
             event.key === "+"
             &&
-            elements.plusBtn
+            productElements.plusBtn
         ) {
-            elements.plusBtn.click();
+
+            productElements.plusBtn.click();
         }
 
         if (
             event.key === "-"
             &&
-            elements.minusBtn
+            productElements.minusBtn
         ) {
-            elements.minusBtn.click();
+
+            productElements.minusBtn.click();
         }
     }
 );
 
-// INIT
+// init
 document.addEventListener(
     "DOMContentLoaded",
     () => {
+
         fetchProduct();
+
         if (
             typeof updateCartCount ===
             "function"
         ) {
+
             updateCartCount();
         }
     }
 );
+
+})();

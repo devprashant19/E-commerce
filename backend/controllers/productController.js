@@ -1,77 +1,184 @@
 const db = require("../config/db");
 
 // helper functions
-const safeNumber = (value) => {
-    const parsed =
-        parseFloat(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
-
-const safeInteger = (value) => {
-    const parsed =
-        parseInt(value);
-
-    return isNaN(parsed)
-        ? 0
-        : parsed;
-};
+const {
+    safeNumber,
+    safeInteger,
+    sanitizeString,
+    getPagination,
+    buildPaginationMeta,
+    safeArray
+} = require("../utils/helpers");
 
 // get all products
-const getProducts = (req, res) => {
-    let query = `
-        SELECT
-            id,
-            name,
-            description,
-            price,
-            image,
-            category,
-            stock,
-            featured
-        FROM products
-    `;
-    const params = [];
+const getProducts = async (req, res) => {
 
-    // category filter
-    if (req.query.category) {
-        query += " WHERE category = ?";
-        params.push(
-            String(
-                req.query.category
-            ).trim()
+    try {
+
+        const {
+            page,
+            limit,
+            offset
+        } = getPagination(
+            req.query.page,
+            req.query.limit,
+            50
         );
-    }
 
-    // featured filter
-    if (req.query.featured === "true") {
-        query += params.length
-            ? " AND featured = 1"
-            : " WHERE featured = 1";
-    }
+        const search =
+            req.query.search
+                ? `%${sanitizeString(
+                    req.query.search
+                )}%`
+                : null;
 
-    query += " ORDER BY id DESC";
+        let baseQuery = `
+            FROM products
+        `;
 
-    db.query(query, params, (error, results) => {
-        if (error) {
-            console.error(error);
+        const conditions = [];
+        const params = [];
 
-            return res.status(500).json({
-                success: false,
-                message: "Server error"
-            });
+        // category filter
+        if (req.query.category) {
+
+            conditions.push(
+                "category = ?"
+            );
+
+            params.push(
+                sanitizeString(
+                    req.query.category
+                )
+            );
         }
 
-        res.status(200).json({
-            success: true,
-            products:
-                Array.isArray(results)
-                    ? results
-                    : []
-        });
-    });
+        // featured filter
+        if (
+            req.query.featured === "true"
+        ) {
+
+            conditions.push(
+                "featured = 1"
+            );
+        }
+
+        // search filter
+        if (search) {
+
+            conditions.push(
+                "name LIKE ?"
+            );
+
+            params.push(search);
+        }
+
+        // build where clause
+        if (conditions.length) {
+
+            baseQuery += `
+                WHERE ${conditions.join(" AND ")}
+            `;
+        }
+
+        // count query
+        const countQuery = `
+            SELECT COUNT(*) AS total
+            ${baseQuery}
+        `;
+
+        // product query
+        const productQuery = `
+            SELECT
+                id,
+                name,
+                description,
+                price,
+                image,
+                category,
+                stock,
+                featured
+            ${baseQuery}
+            ORDER BY id DESC
+            LIMIT ?
+            OFFSET ?
+        `;
+
+        // get total count
+        const [
+            countResults
+        ] = await db.query(
+            countQuery,
+            params
+        );
+
+        const total =
+            Number(
+                countResults?.[0]?.total || 0
+            );
+
+        // fetch products
+        const [
+            results
+        ] = await db.query(
+            productQuery,
+            [
+                ...params,
+                limit,
+                offset
+            ]
+        );
+
+        return res.status(200)
+            .json({
+
+                success: true,
+
+                page,
+
+                limit,
+
+                total,
+
+                ...buildPaginationMeta(
+                    total,
+                    page,
+                    limit
+                ),
+
+                count:
+                    safeArray(results)
+                        .length,
+
+                products:
+                    safeArray(results)
+            });
+
+    } catch (error) {
+
+        console.error(
+            "GET PRODUCTS ERROR:"
+        );
+
+        console.error(
+            error
+        );
+
+        console.error(
+            "STACK:"
+        );
+
+        console.error(
+            error.stack
+        );
+
+        return res.status(500)
+            .json({
+                success: false,
+                message:
+                    error.message || "Failed to fetch products"
+            });
+    }
 };
 
 // get single product
@@ -166,15 +273,11 @@ const createProduct = (req, res) => {
     db.query(
         query,
         [
-            String(name).trim(),
+            sanitizeString(name),
             description || "",
             safeNumber(price),
-            String(
-                image || ""
-            ).trim(),
-            String(
-                category || ""
-            ).trim(),
+            sanitizeString(image),
+            sanitizeString(category),
             Math.max(
                 0,
                 safeInteger(stock)
@@ -263,15 +366,11 @@ const updateProduct = (req, res) => {
     db.query(
         query,
         [
-            String(name).trim(),
+            sanitizeString(name),
             description || "",
             safeNumber(price),
-            String(
-                image || ""
-            ).trim(),
-            String(
-                category || ""
-            ).trim(),
+            sanitizeString(image),
+            sanitizeString(category),
             Math.max(
                 0,
                 safeInteger(stock)

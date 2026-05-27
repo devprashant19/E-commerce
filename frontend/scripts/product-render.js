@@ -1,15 +1,83 @@
-// product render helpers
+// escape html helper
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+}
+
+// safe number
+function safeNumber(
+    value,
+    fallback = 0
+) {
+
+    const parsed =
+        Number(value);
+
+    return Number.isFinite(
+        parsed
+    )
+        ? parsed
+        : fallback;
+}
+
+// render stars
 function renderStars(
     rating = 0
 ) {
+
     let stars = "";
+
+    const safeRating =
+        Math.max(
+            0,
+            Math.min(
+                5,
+                Math.round(
+                    safeNumber(
+                        rating,
+                        0
+                    )
+                )
+            )
+        );
+
     for (
         let index = 0;
         index < 5;
         index++
     ) {
+
         stars +=
-            index < rating
+            index < safeRating
                 ? `
                     <i class="fas fa-star"></i>
                 `
@@ -17,52 +85,53 @@ function renderStars(
                     <i class="far fa-star"></i>
                 `;
     }
+
     return stars;
 }
 
-// product card
-function renderProductCard(
-    product,
-    container
+// create product card html
+function createProductCardHTML(
+    product
 ) {
-    if (
-        !product ||
-        !container
-    ) {
-        return;
-    }
-    const card =
-        document.createElement(
-            "div"
-        );
 
-    card.classList.add(
-        "pro"
-    );
+    return `
+        <div class="product-image-wrapper">
 
-    card.innerHTML = `
-        <img
-            src="${
-                AppUtils.defaultImage(
-                    product.image
-                )
-            }"
-            alt="${
-                product.name
-            }"
-        >
+            <img
+                src="${
+                    escapeHTML(
+                        AppUtils.defaultImage(
+                            product.image
+                        )
+                    )
+                }"
+
+                alt="${
+                    escapeHTML(
+                        product.name
+                    )
+                }"
+
+                loading="lazy"
+            >
+        </div>
 
         <div class="des">
+
             <span>
                 ${
-                    product.brand
-                    || "Brand"
+                    escapeHTML(
+                        product.brand
+                        || "Fashion"
+                    )
                 }
             </span>
 
             <h5>
                 ${
-                    product.name
+                    escapeHTML(
+                        product.name
+                    )
                 }
             </h5>
 
@@ -82,15 +151,69 @@ function renderProductCard(
                 }
             </h4>
         </div>
-    `;
 
-    card.addEventListener(
-        "click",
-        () => {
-            window.location.href =
-                `product.html?id=${product.id}`;
-        }
+        <div class="product-actions">
+
+            <a
+                href="product.html?id=${
+                    encodeURIComponent(
+                        product.id
+                    )
+                }"
+
+                class="view-btn"
+            >
+                View
+            </a>
+
+            <button
+                type="button"
+
+                class="add-cart-btn"
+
+                data-id="${
+                    encodeURIComponent(
+                        product.id
+                    )
+                }"
+            >
+                Add Cart
+            </button>
+        </div>
+    `;
+}
+
+// render product card
+function renderProductCard(
+    product,
+    container
+) {
+
+    if (
+        !product
+        ||
+        !container
+    ) {
+
+        return;
+    }
+
+    const card =
+        document.createElement(
+            "div"
+        );
+
+    card.classList.add(
+        "pro"
     );
+
+    card.dataset.productId =
+        product.id;
+
+    card.innerHTML =
+        createProductCardHTML(
+            product
+        );
 
     container.appendChild(
         card
@@ -101,18 +224,18 @@ function renderProductCard(
 function renderProductGallery(
     product
 ) {
+
     if (
         !window.mainImage
     ) {
+
         return;
     }
 
     const galleryImages =
-        Array.isArray(
+        AppUtils.safeArray(
             product.images
-        )
-        &&
-        product.images.length
+        ).length
             ? product.images
             : [product.image];
 
@@ -126,7 +249,10 @@ function renderProductGallery(
             ".small-image-group"
         );
 
-    if (!imageGroup) {
+    if (
+        !imageGroup
+    ) {
+
         return;
     }
 
@@ -135,9 +261,11 @@ function renderProductGallery(
             ".small-image"
         );
 
+    // single image
     if (
         galleryImages.length <= 1
     ) {
+
         imageGroup.style.display =
             "none";
 
@@ -148,12 +276,19 @@ function renderProductGallery(
         "flex";
 
     thumbs.forEach(
-        (image, index) => {
+        (
+            image,
+            index
+        ) => {
+
             image.src =
                 AppUtils.defaultImage(
                     galleryImages[index]
                     || galleryImages[0]
                 );
+
+            image.loading =
+                "lazy";
 
             image.onclick =
                 () => {
@@ -172,6 +307,7 @@ function renderProductGallery(
 function renderProductRating(
     product
 ) {
+
     const ratingContainer =
         document.querySelector(
             ".product-rating"
@@ -180,35 +316,38 @@ function renderProductRating(
     if (
         !ratingContainer
     ) {
+
         return;
     }
 
-    ratingContainer.innerHTML = `
-        ${
-            renderStars(
-                Math.round(
-                    Number(
-                        product.rating || 4.5
-                    )
-                )
-            )
-        }
+    const rating =
+        safeNumber(
+            product.rating,
+            4.5
+        );
 
-        <span id="product-rating-text">
-            (
-                ${
-                    product.rating || 4.5
-                }
-                Ratings
-            )
-        </span>
-    `;
+    ratingContainer.innerHTML =
+        `
+            ${
+                renderStars(
+                    rating
+                )
+            }
+
+            <span id="product-rating-text">
+                (
+                    ${rating}
+                    Ratings
+                )
+            </span>
+        `;
 }
 
 // recently viewed
 function updateRecentlyViewed(
     product
 ) {
+
     let viewed =
         AppUtils.getJSON(
             "recentlyViewed",
@@ -216,22 +355,50 @@ function updateRecentlyViewed(
         );
 
     viewed =
-        viewed.filter(
-            (item) =>
-                item.id !== product.id
+        AppUtils.safeArray(
+            viewed
+        ).filter(
+            (
+                item
+            ) => {
+
+                return (
+                    Number(
+                        item.id
+                    ) !==
+                    Number(
+                        product.id
+                    )
+                );
+            }
         );
 
     viewed.unshift({
-        id: product.id,
-        name: product.name,
-        brand: product.brand,
-        category: product.category,
-        price: product.price,
-        image: product.image
+
+        id:
+            product.id,
+
+        name:
+            product.name,
+
+        brand:
+            product.brand,
+
+        category:
+            product.category,
+
+        price:
+            product.price,
+
+        image:
+            product.image
     });
 
     viewed =
-        viewed.slice(0, 8);
+        viewed.slice(
+            0,
+            8
+        );
 
     AppUtils.setJSON(
         "recentlyViewed",
@@ -239,17 +406,23 @@ function updateRecentlyViewed(
     );
 }
 
-// main render
+// main product render
 function renderProduct(
     product
 ) {
-    if (!product) {
+
+    if (
+        !product
+    ) {
+
         return;
     }
 
+    // category
     if (
         window.productCategory
     ) {
+
         window.productCategory.innerText =
             `Home / ${
                 product.category
@@ -257,26 +430,30 @@ function renderProduct(
             }`;
     }
 
+    // name
     if (
         window.productName
     ) {
+
         window.productName.innerText =
             product.name
             || "Product";
     }
 
+    // discounted price
     if (
         window.productPrice
     ) {
+
         const discountedPrice =
-            Number(
-                product.price || 0
+            safeNumber(
+                product.price
             ) *
             (
                 1 -
                 (
-                    Number(
-                        product.discount_percent || 0
+                    safeNumber(
+                        product.discount_percent
                     ) / 100
                 )
             );
@@ -287,9 +464,11 @@ function renderProduct(
             );
     }
 
+    // original price
     if (
         window.productOriginalPrice
     ) {
+
         window.productOriginalPrice.innerText =
             AppUtils.formatPrice(
                 product.original_price
@@ -297,50 +476,86 @@ function renderProduct(
             );
     }
 
+    // discount
     if (
         window.productDiscount
     ) {
+
         window.productDiscount.innerText =
             `${
-                product.discount_percent || 0
+                safeNumber(
+                    product.discount_percent
+                )
             }% OFF`;
     }
 
+    // brand
     if (
         window.productBrand
     ) {
+
         window.productBrand.innerText =
             product.brand
             || "Brand";
     }
 
+    // description
     if (
         window.productDescription
     ) {
+
         window.productDescription.innerText =
             product.description
             || "Premium quality product.";
     }
 
+    // stock
     if (
         window.productStock
     ) {
+
         window.productStock.innerText =
-            Number(
+            safeNumber(
                 product.stock
             ) > 0
                 ? `${product.stock} Available`
                 : "Out Of Stock";
     }
 
+    // main image
     if (
         window.mainImage
     ) {
+
         window.mainImage.src =
             AppUtils.defaultImage(
                 product.image
             );
+
+        window.mainImage.alt =
+            escapeHTML(
+                product.name
+                || "Product"
+            );
+
+        window.mainImage.loading =
+            "eager";
+
+        window.mainImage.onerror =
+            () => {
+
+                window.mainImage.src =
+                    "/assets/images/f1.jpg";
+            };
     }
+
+    // page title
+    document.title =
+        `${
+            escapeHTML(
+                product.name
+            )
+        } | AnthropicBots E-Commerce`;
 
     renderProductGallery(
         product

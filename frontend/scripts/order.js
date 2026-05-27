@@ -1,26 +1,55 @@
-// orders
-const orders =
-    AppUtils.getJSON(
-        "orders",
-        []
-    );
+// current order
+let currentOrder =
+    null;
 
-// latest order
-const latestOrder =
-    Array.isArray(orders)
-    &&
-    orders.length > 0
-        ? orders[
-            orders.length - 1
-        ]
-        : null;
+// get order id from url
+const orderId =
+    new URLSearchParams(
+        window.location.search
+    ).get("id");
 
-// redirect if no order
+// redirect if missing order id
 if (
-    !latestOrder
+    !orderId
 ) {
+
     window.location.href =
         "shop.html";
+}
+
+// escape html
+function escapeHTML(
+    value
+) {
+
+    return String(
+        value || ""
+    )
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 }
 
 // elements
@@ -62,73 +91,148 @@ const elements = {
         )
 };
 
+// fetch order details
+async function fetchOrder() {
+
+    try {
+
+        const response =
+            await AppUtils.apiRequest(
+                `/orders/${orderId}`
+            );
+
+        if (
+            !response.success
+            ||
+            !response.order
+        ) {
+
+            AppUtils.notify(
+                "Order not found",
+                "error"
+            );
+
+            setTimeout(
+                () => {
+
+                    window.location.href =
+                        "shop.html";
+
+                },
+                1000
+            );
+
+            return;
+        }
+
+        currentOrder =
+            response.order;
+
+        renderOrderDetails();
+
+        renderOrderItems();
+
+    } catch (error) {
+
+        console.error(
+            "ORDER FETCH ERROR:",
+            error
+        );
+
+        AppUtils.notify(
+            "Failed to load order",
+            "error"
+        );
+    }
+}
+
 // render order details
-if (
-    elements.orderId
-) {
-    elements.orderId.innerText =
-        latestOrder.id || "N/A";
-}
-if (
-    elements.orderDate
-) {
-    const formattedDate =
-        latestOrder.date
-            ? new Date(
-                latestOrder.date
-            ).toLocaleDateString()
-            : "N/A";
-    elements.orderDate.innerText =
-        formattedDate;
-}
+function renderOrderDetails() {
 
-// status
-const status =
-    latestOrder.status ||
-    "Pending";
+    if (
+        !currentOrder
+    ) {
+        return;
+    }
 
-if (
-    elements.statusBadge
-) {
-    elements.statusBadge.innerText =
-        status;
-    elements.statusBadge.className =
-        "status-badge";
-    elements.statusBadge.classList.add(
-        status.toLowerCase()
-    );
-}
+    if (
+        elements.orderId
+    ) {
 
-// timeline
-if (
-    [
-        "Processing",
-        "Shipped",
-        "Delivered"
-    ].includes(status)
-) {
-    elements.processingStep?.classList.add(
-        "active-step"
-    );
-}
-if (
-    [
-        "Shipped",
-        "Delivered"
-    ].includes(status)
-) {
-    elements.shippedStep?.classList.add(
-        "active-step"
-    );
-}
-if (
-    status === "Delivered"
-) {
-    elements.deliveredStep?.classList.add(
-        "active-step"
-    );
-}
+        elements.orderId.innerText =
+            currentOrder.id || "N/A";
+    }
 
+    if (
+        elements.orderDate
+    ) {
+
+        const formattedDate =
+            currentOrder.created_at
+                ? new Date(
+                    currentOrder.created_at
+                ).toLocaleDateString()
+                : "N/A";
+
+        elements.orderDate.innerText =
+            formattedDate;
+    }
+
+    // status
+    const status =
+        currentOrder.status ||
+        "pending";
+
+    if (
+        elements.statusBadge
+    ) {
+
+        elements.statusBadge.innerText =
+            status;
+
+        elements.statusBadge.className =
+            "status-badge";
+
+        elements.statusBadge.classList.add(
+            status.toLowerCase()
+        );
+    }
+
+    // timeline
+    if (
+        [
+            "processing",
+            "shipped",
+            "delivered"
+        ].includes(status.toLowerCase())
+    ) {
+
+        elements.processingStep?.classList.add(
+            "active-step"
+        );
+    }
+
+    if (
+        [
+            "shipped",
+            "delivered"
+        ].includes(status.toLowerCase())
+    ) {
+
+        elements.shippedStep?.classList.add(
+            "active-step"
+        );
+    }
+
+    if (
+        status.toLowerCase() === "delivered"
+    ) {
+
+        elements.deliveredStep?.classList.add(
+            "active-step"
+        );
+    }
+}
 // render items
 function renderOrderItems() {
     if (
@@ -140,7 +244,7 @@ function renderOrderItems() {
         "";
 
     const items =
-        latestOrder.items || [];
+        currentOrder.items || [];
 
     if (
         !Array.isArray(items)
@@ -188,13 +292,17 @@ function renderOrderItems() {
                 `
                     <div class="order-item-left">
                         <img
-                            src="${AppUtils.defaultImage(item.img || item.image)}"
-                            alt="${item.name || "Product"}"
+                            src="${escapeHTML(
+                                AppUtils.defaultImage(
+                                    item.img || item.image
+                                )
+                            )}"
+                            alt="${escapeHTML(item.name || "Product")}"
                             loading="lazy"
                         >
                         <div>
                             <h4>
-                                ${item.name || "Product"}
+                                ${escapeHTML(item.name || "Product")}
                             </h4>
                             <p>
                                 Quantity:
@@ -220,6 +328,7 @@ function renderOrderItems() {
 document.addEventListener(
     "DOMContentLoaded",
     () => {
-        renderOrderItems();
+
+        fetchOrder();
     }
 );

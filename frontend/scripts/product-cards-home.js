@@ -15,9 +15,12 @@ function safeText(
     value,
     fallback = ""
 ) {
-    return String(
+    const text = String(
         value ?? fallback
     );
+    return typeof AppUtils !== "undefined" && typeof AppUtils.escapeHTML === "function"
+        ? AppUtils.escapeHTML(text)
+        : text;
 }
 
 function safePrice(
